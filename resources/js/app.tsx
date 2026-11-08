@@ -18,6 +18,7 @@ void createInertiaApp({
                 return StorefrontLayout;
             case name === 'home' ||
                 name === 'privacy' ||
+                name === 'terms' ||
                 name.startsWith('rent/') ||
                 name.startsWith('bookings/'):
                 return PublicLayout;

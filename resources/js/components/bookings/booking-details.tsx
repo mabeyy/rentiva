@@ -189,7 +189,12 @@ export function BookingDetails({
                 {cancelUrl && (
                     <ConfirmDialog
                         trigger={
-                            <Button variant="outline">Cancel booking</Button>
+                            <Button
+                                variant="outline"
+                                className="w-full rounded-full sm:w-auto"
+                            >
+                                Cancel booking
+                            </Button>
                         }
                         title="Cancel this booking?"
                         description="The owner will be notified and the dates released. This cannot be undone."

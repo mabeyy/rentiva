@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
+import { TurnstileWidget } from '@/components/turnstile-widget';
 import { calculateBookingQuote } from '@/lib/booking-quote';
 import { formatDateRange, formatPeso, toIsoDate } from '@/lib/format';
 import { defaultPaymentMethods, totalLabelFor } from '@/lib/payment';
@@ -384,6 +385,8 @@ export function BookingRequestDialog({
                                 </div>
                                 <InputError message={errors.accepted_terms} />
                             </div>
+
+                            <TurnstileWidget errors={errors} />
 
                             <DialogFooter>
                                 <Button

@@ -20,13 +20,7 @@ export default function Home({
 }) {
     return (
         <>
-            <Head title="Booking pages for car rental owners">
-                <meta
-                    head-key="description"
-                    name="description"
-                    content="Give your car rental business its own booking page. Renters see only your cars, request dates and pay you at pickup."
-                />
-            </Head>
+            <Head title="Booking pages for car rental owners" />
 
             <HeroSection appHost={appHost} />
             <InboxComparison />

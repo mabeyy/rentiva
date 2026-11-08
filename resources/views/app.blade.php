@@ -38,8 +38,32 @@
 
         @viteReactRefresh
         @vite(['resources/css/app.css', 'resources/js/app.tsx', "resources/js/pages/{$page['component']}.tsx"])
+        {{-- Link-preview and search tags, rendered on the server so Facebook, Messenger and crawlers see them --}}
+        @php
+            $meta = [
+                'title' => config('app.name'),
+                'description' => 'Your own booking page for your car rental business. Renters book your cars directly and pay you at pickup.',
+                'image' => asset('images/landing/corolla-black.jpg'),
+                'url' => url()->current(),
+                ...($meta ?? []),
+            ];
+        @endphp
+        <meta name="description" content="{{ $meta['description'] }}">
+        <link rel="canonical" href="{{ $meta['url'] }}">
+        <meta property="og:site_name" content="{{ config('app.name') }}">
+        <meta property="og:type" content="website">
+        <meta property="og:locale" content="en_PH">
+        <meta property="og:title" content="{{ $meta['title'] }}">
+        <meta property="og:description" content="{{ $meta['description'] }}">
+        <meta property="og:url" content="{{ $meta['url'] }}">
+        <meta property="og:image" content="{{ $meta['image'] }}">
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:title" content="{{ $meta['title'] }}">
+        <meta name="twitter:description" content="{{ $meta['description'] }}">
+        <meta name="twitter:image" content="{{ $meta['image'] }}">
+
         <x-inertia::head>
-            <title>{{ config('app.name', 'Laravel') }}</title>
+            <title>{{ $meta['title'] }}</title>
         </x-inertia::head>
     </head>
     <body class="font-sans antialiased">

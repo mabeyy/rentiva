@@ -1,7 +1,8 @@
 import type { LucideIcon } from 'lucide-react';
 import { Banknote, BadgeCheck, Clock } from 'lucide-react';
 import { usePage } from '@inertiajs/react';
-import { useState } from 'react';
+import type { RefObject } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { BookingRequestDialog } from '@/components/bookings/booking-request-dialog';
 import { BookingSummary } from '@/components/bookings/booking-summary';
@@ -19,9 +20,36 @@ const reassurances: { icon: LucideIcon; label: string }[] = [
 ];
 
 /**
+ * Whether the element is still below the screen, i.e. the renter hasn't
+ * scrolled down to it yet.
+ */
+function useIsBelowScreen(element: RefObject<HTMLElement | null>) {
+    const [isBelow, setIsBelow] = useState(false);
+
+    useEffect(() => {
+        if (!element.current) {
+            return;
+        }
+
+        const observer = new IntersectionObserver(([entry]) =>
+            setIsBelow(
+                !entry.isIntersecting && entry.boundingClientRect.top > 0,
+            ),
+        );
+        observer.observe(element.current);
+
+        return () => observer.disconnect();
+    }, [element]);
+
+    return isBelow;
+}
+
+/**
  * Sticky booking box on a car page: pick dates, see the total, request it.
  * Until dates are picked the main button opens the calendar instead of
- * sitting disabled.
+ * sitting disabled. On phones, where the box sits below the car details, a
+ * bar at the bottom of the screen carries the price and button until the
+ * renter scrolls down to it.
  */
 export function BookingCard({
     car,
@@ -43,9 +71,26 @@ export function BookingCard({
     const bookingRules = storefront
         ? bookingWindow(storefront.booking_rules)
         : undefined;
+    const card = useRef<HTMLDivElement>(null);
+    const showMobileBar =
+        useIsBelowScreen(card) && storefront?.accepting_bookings !== false;
+
+    function proceed(): void {
+        if (quote) {
+            setIsDialogOpen(true);
+
+            return;
+        }
+
+        card.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setIsPickerOpen(true);
+    }
 
     return (
-        <div className="space-y-5 rounded-3xl border bg-background p-6 shadow-xl">
+        <div
+            ref={card}
+            className="space-y-5 rounded-3xl border bg-background p-6 shadow-xl"
+        >
             <p>
                 <span className="font-display text-3xl font-extrabold tracking-tight tabular-nums">
                     {formatPeso(car.daily_rate)}
@@ -85,9 +130,7 @@ export function BookingCard({
                 <BrandButton
                     className="h-12 w-full rounded-full text-base"
                     size="lg"
-                    onClick={() =>
-                        quote ? setIsDialogOpen(true) : setIsPickerOpen(true)
-                    }
+                    onClick={proceed}
                 >
                     {quote ? 'Request to book' : 'Check availability'}
                 </BrandButton>
@@ -101,6 +144,25 @@ export function BookingCard({
                     </li>
                 ))}
             </ul>
+
+            {showMobileBar && (
+                <div className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-4 border-t bg-background/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_-12px_rgb(0_0_0/0.15)] backdrop-blur lg:hidden">
+                    <p className="min-w-0">
+                        <span className="font-display text-xl font-extrabold tracking-tight tabular-nums">
+                            {formatPeso(quote ? quote.total : car.daily_rate)}
+                        </span>
+                        <span className="text-sm text-muted-foreground">
+                            {quote ? ' total' : ' /day'}
+                        </span>
+                    </p>
+                    <BrandButton
+                        className="h-11 shrink-0 rounded-full px-6"
+                        onClick={proceed}
+                    >
+                        {quote ? 'Request to book' : 'Check availability'}
+                    </BrandButton>
+                </div>
+            )}
 
             {quote && range?.from && range.to && (
                 <BookingRequestDialog

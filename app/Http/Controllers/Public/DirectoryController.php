@@ -58,6 +58,9 @@ class DirectoryController extends Controller
             ),
             'cities' => Storefront::inDirectory()->whereNotNull('city')->distinct()->orderBy('city')->pluck('city'),
             'filters' => (object) $filters,
+        ])->withViewData('meta', [
+            'title' => 'Rent a car from trusted local rental companies - '.config('app.name'),
+            'description' => 'Compare local car rental businesses in the Philippines and book directly with the operator. No account needed, pay at pickup.',
         ]);
     }
 }

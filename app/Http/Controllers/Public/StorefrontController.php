@@ -12,6 +12,7 @@ use App\Models\Car;
 use App\Models\Review;
 use App\Models\Storefront;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -45,7 +46,7 @@ class StorefrontController extends Controller
             'reviews' => $this->publicReviews($storefront->reviews()->getQuery()),
             'filters' => (object) $filters,
             ...$this->carOptions(),
-        ]);
+        ])->withViewData('meta', $this->storefrontMeta($storefront, $fleet));
     }
 
     /**
@@ -64,7 +65,54 @@ class StorefrontController extends Controller
                 'count' => $car->reviews()->count(),
                 'average' => round((float) $car->reviews()->avg('rating'), 1) ?: null,
             ],
+        ])->withViewData('meta', $this->carMeta($storefront, $car));
+    }
+
+    /**
+     * Link-preview text for a booking page: where the business is, its
+     * cheapest rate and how many cars it has.
+     *
+     * @param  Collection<int, Car>  $fleet
+     * @return array{title: string, description: string, url: string, image?: string}
+     */
+    private function storefrontMeta(Storefront $storefront, Collection $fleet): array
+    {
+        $place = $storefront->city ? " in {$storefront->city}" : '';
+        $priceFrom = $fleet->isNotEmpty() ? ' from '.self::peso($fleet->min('daily_rate')).'/day' : '';
+        $image = $storefront->logo_url
+            ?? $storefront->listedCars()->whereHas('images')->with('coverImage')->first()?->coverImage?->url;
+
+        return array_filter([
+            'title' => "{$storefront->name} | Car Rental{$place} | Book Online",
+            'description' => $storefront->tagline
+                ?: "Rent a car from {$storefront->name}{$place}{$priceFrom}. {$fleet->count()} ".str('vehicle')->plural($fleet->count()).' to choose from. Book online in minutes.',
+            'url' => route('storefronts.show', $storefront),
+            'image' => $image,
         ]);
+    }
+
+    /**
+     * Link-preview text for one car: its rate, seats and transmission, with
+     * its first photo.
+     *
+     * @return array{title: string, description: string, url: string, image?: string}
+     */
+    private function carMeta(Storefront $storefront, Car $car): array
+    {
+        return array_filter([
+            'title' => "{$car->name} for rent | {$storefront->name}",
+            'description' => "Rent this {$car->name} from {$storefront->name} for ".self::peso($car->daily_rate)."/day. {$car->seats} seats, {$car->transmission->label()}. Book online and pay at pickup.",
+            'url' => route('storefronts.cars.show', [$storefront, $car]),
+            'image' => $car->images->first()?->url,
+        ]);
+    }
+
+    /**
+     * "₱2,500" from centavos, without the centavos.
+     */
+    private static function peso(int $centavos): string
+    {
+        return '₱'.number_format($centavos / 100);
     }
 
     /**

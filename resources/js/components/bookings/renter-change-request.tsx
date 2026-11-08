@@ -64,7 +64,7 @@ export function RenterChangeRequest({
         return (
             <Button
                 variant="outline"
-                className="rounded-full"
+                className="w-full rounded-full sm:w-auto"
                 onClick={() => setIsOpen(true)}
             >
                 <CalendarClock /> Request different dates

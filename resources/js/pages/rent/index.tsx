@@ -40,17 +40,12 @@ export default function RentIndex({
 }) {
     const { apply, reset } = useQueryFilters(rent(), filters);
     const isFiltered = Boolean(filters.city || filters.search);
-    const total = storefronts.meta.total;
+    const shownFeatured = isFiltered ? [] : featured;
+    const total = storefronts.meta.total + shownFeatured.length;
 
     return (
         <>
-            <Head title="Rent a car from trusted local rental companies">
-                <meta
-                    head-key="description"
-                    name="description"
-                    content="Compare local car rental businesses in the Philippines and book directly with the operator. No account needed, pay at pickup."
-                />
-            </Head>
+            <Head title="Rent a car from trusted local rental companies" />
 
             <section className="relative overflow-hidden bg-paper">
                 <div
@@ -127,14 +122,14 @@ export default function RentIndex({
                         )}
                     </div>
 
-                    {!isFiltered && featured.length > 0 && (
+                    {shownFeatured.length > 0 && (
                         <div className="mb-8 rounded-3xl border border-brand/30 bg-brand/5 p-4 sm:p-5">
                             <p className="mb-4 flex items-center gap-2 text-sm font-semibold text-brand">
                                 <Sparkles className="size-4" /> Featured rental
                                 companies
                             </p>
                             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                                {featured.map((storefront) => (
+                                {shownFeatured.map((storefront) => (
                                     <StorefrontCard
                                         key={storefront.id}
                                         storefront={storefront}
@@ -154,11 +149,13 @@ export default function RentIndex({
                             ))}
                         </div>
                     ) : (
-                        <EmptyState
-                            icon={Store}
-                            title="No rental companies found"
-                            description="Try another city or search term."
-                        />
+                        shownFeatured.length === 0 && (
+                            <EmptyState
+                                icon={Store}
+                                title="No rental companies found"
+                                description="Try another city or search term."
+                            />
+                        )
                     )}
 
                     <PaginationLinks paginated={storefronts} />

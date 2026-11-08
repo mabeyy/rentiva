@@ -7,6 +7,7 @@ use App\Models\Plan;
 use App\Models\Setting;
 use App\Models\TeamMember;
 use App\Models\User;
+use App\Rules\Turnstile;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\DatabaseNotification;
 use Inertia\Middleware;
@@ -110,6 +111,7 @@ class HandleInertiaRequests extends Middleware
                     'permissions' => $membership->permissions,
                 ] : null;
             },
+            'turnstileSiteKey' => Turnstile::isEnabled() ? config('services.turnstile.site_key') : null,
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
     }

@@ -4,8 +4,9 @@ import { toJsonLd } from '@/lib/json-ld';
 import type { Storefront, StorefrontSummary } from '@/types';
 
 /**
- * Title, meta description, Open Graph tags and AutoRental structured data
- * so each lessor's booking page is shareable and indexable on its own.
+ * The page title and AutoRental structured data for a lessor's booking page.
+ * The description and link-preview tags are rendered by the server so
+ * Facebook and Messenger see them (StorefrontController::storefrontMeta).
  */
 export function StorefrontSeo({
     storefront,
@@ -20,11 +21,6 @@ export function StorefrontSeo({
         summary.lowestDailyRate !== null
             ? ` from ${formatPeso(summary.lowestDailyRate)}/day`
             : '';
-    const types =
-        summary.bodyTypes.length > 0
-            ? ` including ${summary.bodyTypes.slice(0, 3).join(', ')}`
-            : '';
-    const description = `Rent a car from ${storefront.name}${place}${priceFrom}. ${summary.vehicleCount} vehicles${types}. Book online in minutes.`;
 
     const mainLocation = storefront.pickup_locations?.find(
         (location) => location.id === storefront.main_pickup_location_id,
@@ -32,30 +28,6 @@ export function StorefrontSeo({
 
     return (
         <Head title={title}>
-            <meta
-                head-key="description"
-                name="description"
-                content={description}
-            />
-            <meta head-key="og:title" property="og:title" content={title} />
-            <meta
-                head-key="og:description"
-                property="og:description"
-                content={description}
-            />
-            <meta
-                head-key="og:url"
-                property="og:url"
-                content={storefront.url}
-            />
-            <meta head-key="og:type" property="og:type" content="website" />
-            {storefront.logo_url && (
-                <meta
-                    head-key="og:image"
-                    property="og:image"
-                    content={storefront.logo_url}
-                />
-            )}
             <script head-key="storefront-jsonld" type="application/ld+json">
                 {toJsonLd({
                     '@context': 'https://schema.org',

@@ -5,6 +5,7 @@ namespace App\Http\Requests\Public;
 use App\Enums\PaymentMethod;
 use App\Models\Booking;
 use App\Models\Car;
+use App\Rules\Turnstile;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -63,6 +64,7 @@ class StoreBookingRequest extends FormRequest
             'with_driver' => ['boolean'],
             'license_photo' => [$this->car()->owner->storefront?->requires_license_photo ? 'required' : 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
             'accepted_terms' => ['accepted'],
+            ...Turnstile::rules(),
         ];
     }
 

@@ -10,11 +10,14 @@ use App\Http\Controllers\Public\DirectoryController;
 use App\Http\Controllers\Public\HomeController;
 use App\Http\Controllers\Public\PrivacyController;
 use App\Http\Controllers\Public\ReviewController;
+use App\Http\Controllers\Public\SitemapController;
 use App\Http\Controllers\Public\StorefrontController;
 use App\Http\Controllers\Public\TermsController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', HomeController::class)->name('home');
+Route::get('sitemap.xml', [SitemapController::class, 'sitemap'])->name('sitemap');
+Route::get('robots.txt', [SitemapController::class, 'robots'])->name('robots');
 
 Route::get('rent', DirectoryController::class)->name('rent');
 Route::get('privacy', [PrivacyController::class, 'platform'])->name('privacy');

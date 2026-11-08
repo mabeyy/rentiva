@@ -101,3 +101,12 @@ test('an owner opens a new alert from the notification bell', function () {
 
     expect($this->owner->unreadNotifications()->count())->toBe(0);
 });
+
+test('the directory counts a featured business and shows no empty state', function () {
+    $this->owner->subscription->plan->update(['features' => ['featured_listing']]);
+
+    visit(route('rent', absolute: false))
+        ->assertSee('1 rental company')
+        ->assertDontSee('No rental companies found')
+        ->assertNoJavaScriptErrors();
+});
