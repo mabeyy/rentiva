@@ -17,19 +17,21 @@ use Illuminate\Support\Str;
  *
  * @property int $id
  * @property string $number e.g. "INV-2026-0042".
- * @property int $owner_id
+ * @property int|null $owner_id Null once the owner deleted their account.
+ * @property string|null $billed_to The business name, kept after the owner's account is deleted.
  * @property int|null $plan_id
  * @property string $plan_name
  * @property CarbonImmutable $period_start
  * @property CarbonImmutable $period_end
  * @property int $amount In centavos.
- * @property string $status unpaid, submitted, paid or rejected.
+ * @property string $status unpaid, submitted, paid, rejected or cancelled.
  * @property CarbonImmutable $due_on
  * @property string|null $payment_reference
  * @property string|null $proof_path Transfer screenshot on the private disk.
  * @property Carbon|null $submitted_at
  * @property Carbon|null $paid_at
  * @property string|null $rejection_reason
+ * @property string|null $cancel_reason Why an admin cancelled it, shown to the owner.
  */
 #[Fillable(['owner_id', 'plan_id', 'plan_name', 'period_start', 'period_end', 'amount', 'status', 'due_on'])]
 class Invoice extends Model
@@ -38,7 +40,7 @@ class Invoice extends Model
     use HasFactory;
 
     /** Days an owner has to pay after the invoice is issued. */
-    public const int DAYS_TO_PAY = 7;
+    public const int DAYS_TO_PAY = 2;
 
     /**
      * Number new invoices.

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\AdminAction;
 use App\Models\Plan;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -29,7 +30,7 @@ class PlanController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        Plan::create($this->validated($request));
+        AdminAction::record(Plan::create($this->validated($request)), 'plan_saved', __('Added'));
 
         return $this->saved(__('Plan added.'));
     }
@@ -37,6 +38,7 @@ class PlanController extends Controller
     public function update(Request $request, Plan $plan): RedirectResponse
     {
         $plan->update($this->validated($request));
+        AdminAction::record($plan, 'plan_saved', __('Updated'));
 
         return $this->saved(__('Plan updated. New prices apply from each owner\'s next invoice.'));
     }

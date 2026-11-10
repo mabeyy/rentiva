@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\Bookings\PriceBooking;
+use App\Models\AdminAction;
 use App\Models\Booking;
 use App\Models\Car;
 use App\Models\Invoice;
@@ -15,7 +16,10 @@ use App\Models\User;
 use App\Notifications\BookingActivity;
 use App\Notifications\BookingReceived;
 use App\Notifications\BookingRequested;
+use App\Notifications\InvoiceCancelled;
 use App\Notifications\InvoiceIssued;
+use App\Notifications\InvoicePaymentReviewed;
+use App\Notifications\InvoiceReminder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
@@ -39,12 +43,96 @@ test('picking a first plan invoices the first month right away; switching doesn\
 
     $invoice = $this->owner->invoices()->sole();
     expect($this->owner->subscription->fresh()->plan_id)->toBe($this->plan->id)
-        ->and($invoice)->amount->toBe(49900)->period_start->toDateString()->toBe(today()->toDateString());
+        ->and($invoice)->amount->toBe(49900)->period_start->toDateString()->toBe(today()->toDateString())
+        ->due_on->toDateString()->toBe(today()->addDays(2)->toDateString());
     Notification::assertSentTo($this->owner, InvoiceIssued::class);
 
     $bigger = Plan::factory()->create(['price' => 129900, 'max_cars' => null]);
     $this->put(route('lessor.billing.update'), ['plan_id' => $bigger->id])->assertSessionHasNoErrors();
+
+    // A bigger plan starts now, with the difference for the rest of the period.
+    $upgrade = $this->owner->invoices()->latest('id')->first();
+    expect($this->owner->invoices()->count())->toBe(2)
+        ->and($upgrade->plan_name)->toContain('upgrade')
+        ->and($upgrade->amount)->toBeGreaterThan(0)->toBeLessThanOrEqual(129900 - 49900)
+        ->and($this->owner->subscription->fresh()->plan_id)->toBe($bigger->id);
+});
+
+test('a smaller plan or a yearly switch starts with the next period, and the owner can keep their plan', function () {
+    Notification::fake();
+    $bigger = Plan::factory()->create(['price' => 129900, 'max_cars' => null]);
+    $this->actingAs($this->owner)->put(route('lessor.billing.update'), ['plan_id' => $bigger->id]);
+    $subscription = $this->owner->subscription->fresh();
+
+    $this->put(route('lessor.billing.update'), ['plan_id' => $this->plan->id])->assertSessionHasNoErrors();
+    expect($subscription->fresh())->plan_id->toBe($bigger->id)->pending_plan_id->toBe($this->plan->id)
+        ->and($this->owner->invoices()->count())->toBe(1);
+
+    $this->travelTo($subscription->current_period_end->addDay());
+    $this->artisan('billing:issue-invoices');
+    expect($subscription->fresh())->plan_id->toBe($this->plan->id)->pending_plan_id->toBeNull()
+        ->and($this->owner->invoices()->latest('id')->first()->amount)->toBe(49900);
+
+    $this->put(route('lessor.billing.update'), ['plan_id' => $this->plan->id, 'billing_cycle' => 'yearly']);
+    expect($subscription->fresh())->billing_cycle->toBe('monthly')->pending_billing_cycle->toBe('yearly');
+    $this->put(route('lessor.billing.update'), ['plan_id' => $this->plan->id, 'billing_cycle' => 'monthly']);
+    expect($subscription->fresh())->pending_billing_cycle->toBeNull()->pending_plan_id->toBeNull();
+});
+
+test('monthly periods keep the same billing day after a short month', function () {
+    Notification::fake();
+    $this->travelTo(now()->setDate(2027, 1, 31));
+    $subscription = Subscription::factory()->for($this->owner, 'owner')->for($this->plan)->create();
+
+    $this->artisan('billing:issue-invoices');
+    $this->travelTo($subscription->fresh()->current_period_end->addDay());
+    $this->artisan('billing:issue-invoices');
+    $this->travelTo($subscription->fresh()->current_period_end->addDay());
+    $this->artisan('billing:issue-invoices');
+
+    expect($this->owner->invoices()->oldest('period_start')->get()->map(fn (Invoice $invoice): string => $invoice->period_start->toDateString().'..'.$invoice->period_end->toDateString())->all())
+        ->toBe(['2027-01-31..2027-02-27', '2027-02-28..2027-03-30', '2027-03-31..2027-04-29']);
+});
+
+test('taking an owner off their plan forgets the paid-up period, so a later plan starts that day', function () {
+    Notification::fake();
+    $this->actingAs($this->owner)->put(route('lessor.billing.update'), ['plan_id' => $this->plan->id]);
+
+    $this->actingAs(User::factory()->admin()->create())
+        ->put(route('admin.lessors.subscription.update', $this->owner), ['plan_id' => null])
+        ->assertSessionHasNoErrors();
+    expect($this->owner->subscription->fresh())->plan_id->toBeNull()->current_period_end->toBeNull();
+
+    $this->travel(70)->days();
+    $this->actingAs($this->owner)->put(route('lessor.billing.update'), ['plan_id' => $this->plan->id]);
+    expect($this->owner->invoices()->latest('id')->first()->period_start->toDateString())->toBe(today()->toDateString());
+});
+
+test('suspended owners aren\'t invoiced or reminded', function () {
+    Notification::fake();
+    Subscription::factory()->for($this->owner, 'owner')->for($this->plan)->create();
+    Invoice::factory()->for($this->owner, 'owner')->create(['due_on' => today()->addDay()->toDateString()]);
+    $this->owner->forceFill(['status' => 'suspended'])->save();
+
+    $this->artisan('billing:issue-invoices');
+    $this->artisan('billing:send-reminders');
+
     expect($this->owner->invoices()->count())->toBe(1);
+    Notification::assertNothingSent();
+});
+
+test('admins can record a payment made outside the app, but can\'t decide a cancelled or paid invoice', function () {
+    Notification::fake();
+    $unpaid = Invoice::factory()->for($this->owner, 'owner')->create();
+    $cancelled = Invoice::factory()->for($this->owner, 'owner')->create(['status' => 'cancelled']);
+    $this->actingAs(User::factory()->admin()->create());
+
+    $this->put(route('admin.billing.invoices.review', $unpaid), ['decision' => 'paid'])->assertSessionHasNoErrors();
+    expect($unpaid->fresh()->status)->toBe('paid')
+        ->and(AdminAction::where('action', 'invoice_paid')->sole()->subject_label)->toBe($unpaid->number);
+
+    $this->put(route('admin.billing.invoices.review', $unpaid), ['decision' => 'rejected', 'reason' => 'x'])->assertStatus(422);
+    $this->put(route('admin.billing.invoices.review', $cancelled), ['decision' => 'paid'])->assertStatus(422);
 });
 
 test('a plan can\'t be picked with more cars than it allows, and adding cars stops at the limit', function () {
@@ -127,7 +215,35 @@ test('admins set where owners pay', function () {
         ->put(route('admin.billing.accounts.update'), ['accounts' => [['bank_name' => 'GCash', 'account_name' => 'Rentiva', 'account_number' => '0917']]])
         ->assertSessionHasNoErrors();
 
-    expect(Setting::get(Setting::PlatformBankAccounts))->toBe([['bank_name' => 'GCash', 'account_name' => 'Rentiva', 'account_number' => '0917']]);
+    expect(Setting::get(Setting::PlatformBankAccounts))->toBe([['bank_name' => 'GCash', 'account_name' => 'Rentiva', 'account_number' => '0917', 'qr_path' => null]]);
+});
+
+test('admins add a QR code owners see when paying, and replacing or removing it deletes the old one', function () {
+    Storage::fake('public');
+    $this->actingAs(User::factory()->admin()->create())
+        ->put(route('admin.billing.accounts.update'), ['accounts' => [
+            ['bank_name' => 'GCash', 'account_name' => 'Rentiva', 'account_number' => '0917', 'qr' => UploadedFile::fake()->image('gcash.png')],
+        ]])
+        ->assertSessionHasNoErrors();
+    $firstQr = Setting::get(Setting::PlatformBankAccounts)[0]['qr_path'];
+    Storage::disk('public')->assertExists($firstQr);
+
+    $this->actingAs($this->owner)
+        ->get(route('lessor.billing.index'))
+        ->assertInertia(fn (Assert $page) => $page->where('bankAccounts.0.qr_url', Storage::disk('public')->url($firstQr))->missing('bankAccounts.0.qr_path'));
+
+    $this->actingAs(User::factory()->admin()->create())
+        ->put(route('admin.billing.accounts.update'), ['accounts' => [
+            ['bank_name' => 'GCash', 'account_name' => 'Rentiva', 'account_number' => '0917', 'qr_path' => $firstQr, 'qr' => UploadedFile::fake()->image('new.png')],
+        ]]);
+    $secondQr = Setting::get(Setting::PlatformBankAccounts)[0]['qr_path'];
+    Storage::disk('public')->assertMissing($firstQr);
+
+    $this->put(route('admin.billing.accounts.update'), ['accounts' => [
+        ['bank_name' => 'BDO', 'account_name' => 'Rentiva', 'account_number' => '0012', 'qr_path' => 'storefronts/someone-elses.png'],
+    ]]);
+    expect(Setting::get(Setting::PlatformBankAccounts)[0]['qr_path'])->toBeNull();
+    Storage::disk('public')->assertMissing($secondQr);
 });
 
 test('the admin plans and billing pages open', function () {
@@ -163,7 +279,7 @@ test('a booking page stops taking online bookings once an invoice is past the gr
 
     $invoice->update(['due_on' => today()->subDays(8)->toDateString()]);
     expect($this->owner->isBillingPaused())->toBeTrue();
-    $this->post(route('cars.bookings.store', $car), [...$request, 'start_date' => today()->addDays(20)->toDateString(), 'end_date' => today()->addDays(22)->toDateString()])
+    $this->post(route('cars.bookings.store', $car), [...$request, 'renter_email' => 'maria@example.com', 'start_date' => today()->addDays(20)->toDateString(), 'end_date' => today()->addDays(22)->toDateString()])
         ->assertSessionHasErrors('start_date');
 
     $this->actingAs($this->owner)
@@ -176,6 +292,7 @@ test('a booking page stops taking online bookings once an invoice is past the gr
 
 test('admins are notified when an owner pays, and can open the alert from their bell', function () {
     Storage::fake('local');
+    Setting::put(Setting::PlatformBankAccounts, [['bank_name' => 'BDO', 'account_name' => 'Rentiva Inc.', 'account_number' => '0012-3456']]);
     $admin = User::factory()->admin()->create();
     $invoice = Invoice::factory()->for($this->owner, 'owner')->create();
 
@@ -185,7 +302,7 @@ test('admins are notified when an owner pays, and can open the alert from their 
     ]);
 
     $alert = $admin->notifications()->sole();
-    expect($alert->data['action'])->toBe('invoice_paid');
+    expect($alert->data['action'])->toBe('invoice_submitted');
 
     $this->actingAs($admin)
         ->get(route('admin.dashboard'))
@@ -366,6 +483,9 @@ test('the admin setup checklist disappears once everything is filled in', functi
     Setting::put(Setting::SupportEmail, 'help@rentiva.ph');
     Setting::put(Setting::SupportPhone, '0917');
     Setting::put(Setting::PriorityPhone, '0918');
+    Setting::put(Setting::DpoName, 'Ana Reyes');
+    Setting::put(Setting::DpoEmail, 'dpo@rentiva.ph');
+    Setting::put(Setting::LegalName, 'Rentiva Technologies Inc.');
 
     $this->actingAs(User::factory()->admin()->create())
         ->get(route('admin.dashboard'))
@@ -378,4 +498,193 @@ test('the terms page shows the billing rules owners agree to', function () {
     $this->get(route('terms'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page->component('terms')->where('graceDays', 10)->where('daysToPay', Invoice::DAYS_TO_PAY));
+});
+
+test('owners are told when their payment is confirmed or sent back', function () {
+    Notification::fake();
+    $invoice = Invoice::factory()->for($this->owner, 'owner')->create(['status' => 'submitted']);
+    $this->actingAs(User::factory()->admin()->create());
+
+    $this->put(route('admin.billing.invoices.review', $invoice), ['decision' => 'rejected', 'reason' => 'Amount is short']);
+    Notification::assertSentTo($this->owner, InvoicePaymentReviewed::class, fn (InvoicePaymentReviewed $notification): bool => $notification->toArray($this->owner)['title'] === 'Payment sent back'
+        && str_contains($notification->toArray($this->owner)['body'], 'Amount is short'));
+
+    $this->put(route('admin.billing.invoices.review', $invoice), ['decision' => 'paid']);
+    Notification::assertSentTo($this->owner, InvoicePaymentReviewed::class, fn (InvoicePaymentReviewed $notification): bool => $notification->toArray($this->owner)['title'] === 'Payment received');
+});
+
+test('owners are reminded the day before an invoice is due and the day after it goes overdue', function () {
+    Notification::fake();
+    $dueTomorrow = Invoice::factory()->for($this->owner, 'owner')->create(['due_on' => today()->addDay()->toDateString()]);
+    $overdue = Invoice::factory()->for($this->owner, 'owner')->create(['due_on' => today()->subDay()->toDateString(), 'status' => 'rejected']);
+    Invoice::factory()->for($this->owner, 'owner')->create(['due_on' => today()->addDays(2)->toDateString()]);
+    Invoice::factory()->for($this->owner, 'owner')->create(['due_on' => today()->addDay()->toDateString(), 'status' => 'paid']);
+
+    $this->artisan('billing:send-reminders')->assertSuccessful();
+    $this->artisan('billing:send-reminders')->assertSuccessful();
+
+    // Each reminder goes out once, even when the job runs again.
+    Notification::assertSentToTimes($this->owner, InvoiceReminder::class, 2);
+    Notification::assertSentTo($this->owner, InvoiceReminder::class, fn (InvoiceReminder $notification): bool => $notification->invoice->is($dueTomorrow) && $notification->kind === InvoiceReminder::DueTomorrow);
+    Notification::assertSentTo($this->owner, InvoiceReminder::class, fn (InvoiceReminder $notification): bool => $notification->invoice->is($overdue) && $notification->kind === InvoiceReminder::Overdue);
+});
+
+test('an invoice can\'t be paid before Rentiva has an account to send it to', function () {
+    Storage::fake('local');
+    $invoice = Invoice::factory()->for($this->owner, 'owner')->create();
+
+    $this->actingAs($this->owner)->post(route('lessor.billing.invoices.pay', $invoice), [
+        'payment_reference' => 'BDO-998877',
+        'proof' => UploadedFile::fake()->image('receipt.jpg'),
+    ])->assertSessionHasErrors('payment_reference');
+
+    expect($invoice->fresh()->status)->toBe('unpaid');
+});
+
+test('an owner cancels their plan: it runs to the end of the invoiced period, then ends without a new invoice', function () {
+    Notification::fake();
+    $this->actingAs($this->owner)->put(route('lessor.billing.update'), ['plan_id' => $this->plan->id]);
+    $subscription = $this->owner->subscription->fresh();
+
+    $this->delete(route('lessor.billing.cancel'))->assertSessionHasNoErrors();
+    $this->get(route('lessor.billing.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('subscription.ends_on', $subscription->current_period_end->toDateString())
+            ->where('subscription.next_invoice_on', null));
+    expect($this->owner->fresh()->planIncludes('sms'))->toBe($this->plan->includes('sms'));
+
+    $this->travelTo($subscription->current_period_end->addDay());
+    $this->artisan('billing:issue-invoices');
+
+    expect($this->owner->invoices()->count())->toBe(1)
+        ->and($subscription->fresh())->plan_id->toBeNull()->cancelled_at->toBeNull();
+});
+
+test('an owner keeps a cancelled plan before it ends, and can\'t cancel without one', function () {
+    Notification::fake();
+    $this->actingAs($this->owner)->delete(route('lessor.billing.cancel'))->assertStatus(422);
+
+    $this->put(route('lessor.billing.update'), ['plan_id' => $this->plan->id]);
+    $this->delete(route('lessor.billing.cancel'));
+    $this->post(route('lessor.billing.resume'))->assertSessionHasNoErrors();
+
+    $subscription = $this->owner->subscription->fresh();
+    expect($subscription->cancelled_at)->toBeNull();
+
+    $this->travelTo($subscription->current_period_end->addDay());
+    $this->artisan('billing:issue-invoices');
+    expect($this->owner->invoices()->count())->toBe(2);
+});
+
+test('owners open a printable invoice, which reads as a receipt once paid, but not someone else\'s', function () {
+    $invoice = Invoice::factory()->for($this->owner, 'owner')->create(['number' => 'INV-2026-TEST01']);
+    $this->actingAs($this->owner);
+
+    $this->get(route('lessor.billing.invoices.show', $invoice))->assertOk()->assertSee('Invoice')->assertSee('INV-2026-TEST01')->assertSee('Unpaid');
+
+    $invoice->forceFill(['status' => 'paid', 'paid_at' => now(), 'payment_reference' => 'BDO-1'])->save();
+    $this->get(route('lessor.billing.invoices.show', $invoice))->assertOk()->assertSee('Receipt')->assertSee('BDO-1')->assertSee('Thank you for your payment.');
+
+    $this->get(route('lessor.billing.invoices.show', Invoice::factory()->create()))->assertForbidden();
+});
+
+test('admins cancel an invoice issued by mistake, and the owner is told and no longer owes it', function () {
+    Notification::fake();
+    $invoice = Invoice::factory()->for($this->owner, 'owner')->create(['due_on' => today()->subDays(30)->toDateString()]);
+    expect($this->owner->isBillingPaused())->toBeTrue();
+    $this->actingAs(User::factory()->admin()->create());
+
+    $this->put(route('admin.billing.invoices.cancel', $invoice), ['reason' => 'Issued twice'])->assertSessionHasNoErrors();
+
+    expect($invoice->fresh())->status->toBe('cancelled')->cancel_reason->toBe('Issued twice')
+        ->and($invoice->fresh()->isOverdue())->toBeFalse()
+        ->and($this->owner->isBillingPaused())->toBeFalse();
+    Notification::assertSentTo($this->owner, InvoiceCancelled::class);
+
+    $paid = Invoice::factory()->for($this->owner, 'owner')->create(['status' => 'paid']);
+    $this->put(route('admin.billing.invoices.cancel', $paid), ['reason' => 'x'])->assertStatus(422);
+});
+
+test('a cancelled owner picking a bigger plan pays the difference, and their plan carries on', function () {
+    Notification::fake();
+    $this->travelTo(now()->setDate(2027, 3, 1));
+    $bigger = Plan::factory()->create(['price' => 149900, 'max_cars' => null]);
+    $this->actingAs($this->owner)->put(route('lessor.billing.update'), ['plan_id' => $this->plan->id]);
+    $this->delete(route('lessor.billing.cancel'));
+
+    $this->travel(4)->days();
+    $this->put(route('lessor.billing.update'), ['plan_id' => $bigger->id])->assertSessionHasNoErrors();
+
+    $upgrade = $this->owner->invoices()->latest('id')->first();
+    expect($this->owner->subscription->fresh())->plan_id->toBe($bigger->id)->cancelled_at->toBeNull()
+        ->and($upgrade->plan_name)->toContain('upgrade')
+        // 27 of March's 31 days at the ₱1,000 difference.
+        ->and($upgrade->amount)->toBe((int) round(100000 * 27 / 31));
+});
+
+test('an upgrade is pro-rated even when the period\'s invoice was cancelled', function () {
+    Notification::fake();
+    $this->travelTo(now()->setDate(2027, 3, 1));
+    $bigger = Plan::factory()->create(['price' => 149900, 'max_cars' => null]);
+    $this->actingAs($this->owner)->put(route('lessor.billing.update'), ['plan_id' => $this->plan->id]);
+    $this->owner->invoices()->update(['status' => 'cancelled']);
+
+    $this->travel(28)->days();
+    $this->put(route('lessor.billing.update'), ['plan_id' => $bigger->id]);
+
+    expect($this->owner->invoices()->latest('id')->first()->amount)->toBe((int) round(100000 * 3 / 31));
+});
+
+test('while a smaller plan is waiting, its limits apply, and an outgrown downgrade doesn\'t start', function () {
+    Notification::fake();
+    $bigger = Plan::factory()->create(['price' => 149900, 'max_cars' => null]);
+    $this->actingAs($this->owner)->put(route('lessor.billing.update'), ['plan_id' => $bigger->id]);
+    $this->put(route('lessor.billing.update'), ['plan_id' => $this->plan->id]);
+
+    expect($this->owner->fresh()->planLimit('max_cars'))->toBe(2);
+
+    Car::factory()->count(3)->for($this->owner, 'owner')->create();
+    $subscription = $this->owner->subscription->fresh();
+    $this->travelTo($subscription->current_period_end->addDay());
+    $this->artisan('billing:issue-invoices');
+
+    expect($subscription->fresh())->plan_id->toBe($bigger->id)->pending_plan_id->toBeNull();
+});
+
+test('a reinstated owner isn\'t billed for the time they were suspended', function () {
+    Notification::fake();
+    $this->actingAs($this->owner)->put(route('lessor.billing.update'), ['plan_id' => $this->plan->id]);
+    $admin = User::factory()->admin()->create();
+    $this->actingAs($admin)->put(route('admin.lessors.update', $this->owner), ['status' => 'suspended']);
+
+    $this->travel(100)->days();
+    $this->put(route('admin.lessors.update', $this->owner), ['status' => 'active']);
+    $this->artisan('billing:issue-invoices');
+    $this->travel(1)->days();
+    $this->artisan('billing:issue-invoices');
+
+    expect($this->owner->invoices()->count())->toBe(2)
+        ->and($this->owner->invoices()->latest('id')->first()->period_start->toDateString())->toBe(today()->subDay()->toDateString());
+});
+
+test('cancelling drops a waiting downgrade, and keeping the current plan never trips the limits', function () {
+    Notification::fake();
+    $bigger = Plan::factory()->create(['price' => 149900, 'max_cars' => 3]);
+    $this->actingAs($this->owner)->put(route('lessor.billing.update'), ['plan_id' => $bigger->id]);
+    $this->put(route('lessor.billing.update'), ['plan_id' => $this->plan->id]);
+    $this->delete(route('lessor.billing.cancel'));
+    expect($this->owner->subscription->fresh()->pending_plan_id)->toBeNull();
+
+    $this->post(route('lessor.billing.resume'));
+    $bigger->update(['max_cars' => 1]);
+    Car::factory()->count(2)->for($this->owner, 'owner')->create();
+    $this->put(route('lessor.billing.update'), ['plan_id' => $bigger->id])->assertSessionHasNoErrors();
+});
+
+test('a reminder caught up on the due date says it\'s due today', function () {
+    $invoice = Invoice::factory()->for($this->owner, 'owner')->create(['due_on' => today()->toDateString()]);
+
+    $mail = (new InvoiceReminder($invoice, InvoiceReminder::DueTomorrow, 14))->toMail($this->owner);
+
+    expect($mail->subject)->toContain('is due today');
 });

@@ -1,5 +1,6 @@
 import { Link } from '@inertiajs/react';
 import { AlertTriangle, ArrowRight } from 'lucide-react';
+import { InfoTip } from '@/components/info-tip';
 import { formatPeso } from '@/lib/format';
 import admin from '@/routes/admin';
 
@@ -20,14 +21,19 @@ function Figure({
     label,
     value,
     hint,
+    info,
 }: {
     label: string;
     value: string;
     hint?: string;
+    info?: string;
 }) {
     return (
         <div>
-            <p className="text-xs font-medium text-muted-foreground">{label}</p>
+            <p className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                {label}
+                {info && <InfoTip>{info}</InfoTip>}
+            </p>
             <p className="mt-1 font-display text-2xl font-extrabold tracking-tight tabular-nums">
                 {value}
             </p>
@@ -62,20 +68,24 @@ export function SubscriptionOverview({
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
                 <Figure
                     label="Monthly recurring revenue"
+                    info="What subscriptions bring in each month. Yearly plans count as their yearly price divided by 12."
                     value={formatPeso(metrics.mrr)}
                     hint={`${metrics.yearly_owners} on yearly billing`}
                 />
                 <Figure
                     label="Paying owners"
+                    info="Owners on a plan. Owners who signed up but haven't picked a plan are counted separately."
                     value={String(metrics.paying_owners)}
                     hint={`${metrics.owners_without_plan} without a plan`}
                 />
                 <Figure
                     label="Collected this month"
+                    info="Invoices marked paid this month."
                     value={formatPeso(metrics.collected_this_month)}
                 />
                 <Figure
                     label="Still to collect"
+                    info="Unpaid and rejected invoices. Overdue means past the due date."
                     value={formatPeso(metrics.outstanding)}
                     hint={`${metrics.overdue_owners} ${metrics.overdue_owners === 1 ? 'owner' : 'owners'} overdue`}
                 />

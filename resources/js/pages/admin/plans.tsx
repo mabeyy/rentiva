@@ -238,6 +238,7 @@ export default function AdminPlans({
                                     <Button
                                         variant="ghost"
                                         size="icon"
+                                        tooltip="Edit plan"
                                         aria-label={`Edit ${plan.name}`}
                                         onClick={() => setEditing(plan)}
                                     >

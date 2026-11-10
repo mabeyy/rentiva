@@ -4,7 +4,6 @@ import { PauseCircle } from 'lucide-react';
 import type { FormEvent } from 'react';
 import { OptionSelect } from '@/components/option-select';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { formatPeso } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import admin from '@/routes/admin';
@@ -13,6 +12,13 @@ export type LessorSubscription = {
     plan_id: number | null;
     paused: boolean;
     priority_support: boolean;
+    billing_cycle: 'monthly' | 'yearly';
+    /** The last day already invoiced. */
+    paid_through: string | null;
+    /** Set when the owner cancelled: the plan's last day. */
+    ends_on: string | null;
+    /** A smaller plan or cycle switch waiting for the next period. */
+    pending_plan: string | null;
 } | null;
 
 export type LessorInvoice = {
@@ -67,6 +73,48 @@ export function LessorPlanForm({
                     Online bookings are paused: an invoice is past the grace
                     period.
                 </p>
+            )}
+            {subscription?.plan_id && (
+                <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
+                    <div className="flex gap-2">
+                        <dt className="text-muted-foreground">Billed</dt>
+                        <dd className="capitalize">
+                            {subscription.billing_cycle}
+                        </dd>
+                    </div>
+                    {subscription.paid_through && (
+                        <div className="flex gap-2">
+                            <dt className="text-muted-foreground">
+                                Invoiced through
+                            </dt>
+                            <dd>
+                                {format(
+                                    parseISO(subscription.paid_through),
+                                    'MMM d, yyyy',
+                                )}
+                            </dd>
+                        </div>
+                    )}
+                    {subscription.ends_on && (
+                        <div className="flex gap-2 text-amber-700 dark:text-amber-400">
+                            <dt>Cancelled, ends</dt>
+                            <dd>
+                                {format(
+                                    parseISO(subscription.ends_on),
+                                    'MMM d, yyyy',
+                                )}
+                            </dd>
+                        </div>
+                    )}
+                    {subscription.pending_plan && (
+                        <div className="flex gap-2">
+                            <dt className="text-muted-foreground">
+                                Next period
+                            </dt>
+                            <dd>{subscription.pending_plan}</dd>
+                        </div>
+                    )}
+                </dl>
             )}
             <form
                 onSubmit={submit}

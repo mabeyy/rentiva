@@ -27,7 +27,7 @@ class InvoiceFactory extends Factory
             'period_end' => now()->endOfMonth()->toDateString(),
             'amount' => 149900,
             'status' => 'unpaid',
-            'due_on' => now()->addDays(7)->toDateString(),
+            'due_on' => now()->addDays(Invoice::DAYS_TO_PAY)->toDateString(),
         ];
     }
 }

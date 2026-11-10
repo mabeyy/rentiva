@@ -27,7 +27,7 @@ export function BillingBanner() {
         : billing.overdue > 0
           ? `You have ${billing.overdue === 1 ? 'an overdue invoice' : `${billing.overdue} overdue invoices`}. Online bookings pause ${billing.grace_days} days after the due date.`
           : !billing.has_plan
-            ? 'Pick a plan to keep your booking page running.'
+            ? "Pick a plan to start taking online bookings. Until then, renters see your page but can't book online."
             : null;
 
     if (!message) {

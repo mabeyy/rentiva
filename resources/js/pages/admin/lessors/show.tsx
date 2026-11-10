@@ -14,6 +14,7 @@ import type {
     LessorInvoice,
     LessorSubscription,
 } from '@/components/admin/lessor-plan-form';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { LessorPlanForm } from '@/components/admin/lessor-plan-form';
 import type { LessorRetention } from '@/components/admin/lessor-retention-form';
 import { LessorRetentionForm } from '@/components/admin/lessor-retention-form';
@@ -95,7 +96,7 @@ export default function AdminLessorsShow({
                         {lessor.storefront && (
                             <Button variant="outline" asChild>
                                 <Link
-                                    href={admin.lessors.connections.email(
+                                    href={admin.lessors.connections.notifications(
                                         lessor.id,
                                     )}
                                 >
@@ -103,16 +104,21 @@ export default function AdminLessorsShow({
                                 </Link>
                             </Button>
                         )}
-                        <Button
-                            variant="outline"
-                            onClick={() =>
+                        <ConfirmDialog
+                            trigger={
+                                <Button variant="outline">
+                                    <Eye /> View as owner
+                                </Button>
+                            }
+                            title={`View the app as ${lessor.storefront?.name ?? lessor.name}?`}
+                            description="You'll see their owner area to help them. Changes you make are recorded with your name, and their account settings, plan, invoices and staff stay off-limits. This is noted in the admin log."
+                            confirmLabel="View as owner"
+                            onConfirm={() =>
                                 router.post(
                                     admin.lessors.impersonate(lessor.id).url,
                                 )
                             }
-                        >
-                            <Eye /> View as owner
-                        </Button>
+                        />
                         <LessorStatusButton lessor={lessor} />
                     </div>
                 </div>

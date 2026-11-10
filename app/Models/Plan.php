@@ -53,8 +53,8 @@ class Plan extends Model
      * The app checks each one, so the cards never promise what isn't there.
      */
     public const array FEATURES = [
-        'email' => 'Owner alerts, reminders and every booking email',
-        'sms' => 'SMS texts and reminders (your Semaphore credits)',
+        'email' => 'Email alerts to you and pickup reminders to renters',
+        'sms' => 'SMS texts and reminders (you load text credits)',
         'calendar_sync' => 'Google Calendar sync',
         'peak_pricing' => 'Peak and low season pricing',
         'down_payments' => 'Down payments by bank transfer',

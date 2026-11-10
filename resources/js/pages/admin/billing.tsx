@@ -1,13 +1,25 @@
 import { Head, router, useForm } from '@inertiajs/react';
 import { format, parseISO } from 'date-fns';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, QrCode, Trash2 } from 'lucide-react';
 import type { FormEvent } from 'react';
 import { useState } from 'react';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import Heading from '@/components/heading';
+import { ImageLightbox } from '@/components/image-lightbox';
+import { Hint } from '@/components/info-tip';
 import InputError from '@/components/input-error';
 import { PaginationLinks } from '@/components/pagination-links';
 import { StatusTabs } from '@/components/status-tabs';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import {
     Table,
@@ -19,6 +31,7 @@ import {
 } from '@/components/ui/table';
 import { useQueryFilters } from '@/hooks/use-query-filters';
 import { formatPeso } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import admin from '@/routes/admin';
 import type { Paginated } from '@/types';
 
@@ -28,9 +41,10 @@ type AdminInvoice = {
     owner: string;
     plan_name: string;
     amount: number;
-    status: 'unpaid' | 'submitted' | 'paid' | 'rejected';
+    status: 'unpaid' | 'submitted' | 'paid' | 'rejected' | 'cancelled';
     payment_reference: string | null;
     rejection_reason: string | null;
+    cancel_reason: string | null;
     period_start: string;
     period_end: string;
     due_on: string;
@@ -42,26 +56,85 @@ type BankAccount = {
     bank_name: string;
     account_name: string;
     account_number: string;
+    qr_path: string | null;
+    qr_url: string | null;
 };
+
+/** An account in the form: a new QR picked from disk replaces the saved one. */
+type AccountRow = BankAccount & { qr: File | null };
 
 const statusLabels: Record<AdminInvoice['status'], string> = {
     unpaid: 'Unpaid',
     submitted: 'To check',
     paid: 'Paid',
     rejected: 'Sent back',
+    cancelled: 'Cancelled',
 };
 
+/**
+ * A small square that shows an account's QR code and picks a new one on
+ * click. Owners see the QR when they pay an invoice.
+ */
+function QrPicker({
+    src,
+    onPick,
+}: {
+    src: string | null;
+    onPick: (file: File) => void;
+}) {
+    return (
+        <Hint text={src ? 'Replace QR code' : 'Add QR code'}>
+            <label
+                className={cn(
+                    'relative flex size-9 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-md border bg-white text-muted-foreground transition-colors focus-within:ring-2 focus-within:ring-ring/50 hover:border-foreground/30',
+                    !src && 'border-dashed bg-background',
+                )}
+            >
+                {src ? (
+                    <img
+                        src={src}
+                        alt="QR code"
+                        className="size-full object-contain"
+                    />
+                ) : (
+                    <QrCode className="size-4" />
+                )}
+                <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    aria-label={src ? 'Replace QR code' : 'Add QR code'}
+                    className="sr-only"
+                    onChange={(event) => {
+                        const file = event.target.files?.[0];
+
+                        if (file) {
+                            onPick(file);
+                        }
+                    }}
+                />
+            </label>
+        </Hint>
+    );
+}
+
 function AccountsForm({ accounts }: { accounts: BankAccount[] }) {
-    const form = useForm<{ accounts: BankAccount[] }>({ accounts });
+    const form = useForm<{ accounts: AccountRow[] }>({
+        accounts: accounts.map((account) => ({ ...account, qr: null })),
+    });
 
     function submit(event: FormEvent): void {
         event.preventDefault();
-        form.put(admin.billing.accounts.update().url, { preserveScroll: true });
+        // Files need a multipart POST; Laravel reads _method as the PUT.
+        form.transform((data) => ({ ...data, _method: 'put' }));
+        form.post(admin.billing.accounts.update().url, {
+            preserveScroll: true,
+            forceFormData: true,
+        });
     }
 
     function setAccount(
         index: number,
-        key: keyof BankAccount,
+        key: 'bank_name' | 'account_name' | 'account_number',
         value: string,
     ): void {
         form.setData(
@@ -77,13 +150,14 @@ function AccountsForm({ accounts }: { accounts: BankAccount[] }) {
             <div>
                 <p className="font-medium">Where owners pay</p>
                 <p className="text-sm text-muted-foreground">
-                    Shown on every owner's invoice. Up to three accounts.
+                    Shown on every owner's invoice. Up to three accounts, each
+                    with an optional QR code owners can scan.
                 </p>
             </div>
             {form.data.accounts.map((account, index) => (
                 <div
                     key={index}
-                    className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto]"
+                    className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto_auto]"
                 >
                     <Input
                         aria-label="Bank or e-wallet"
@@ -117,11 +191,28 @@ function AccountsForm({ accounts }: { accounts: BankAccount[] }) {
                             )
                         }
                     />
+                    <QrPicker
+                        src={account.qr_url}
+                        onPick={(file) =>
+                            form.setData(
+                                'accounts',
+                                form.data.accounts.map((row, current) =>
+                                    current === index
+                                        ? {
+                                              ...row,
+                                              qr: file,
+                                              qr_url: URL.createObjectURL(file),
+                                          }
+                                        : row,
+                                ),
+                            )
+                        }
+                    />
                     <Button
                         type="button"
                         variant="ghost"
                         size="icon"
-                        aria-label="Remove account"
+                        tooltip="Remove account"
                         onClick={() =>
                             form.setData(
                                 'accounts',
@@ -149,6 +240,9 @@ function AccountsForm({ accounts }: { accounts: BankAccount[] }) {
                                     bank_name: '',
                                     account_name: '',
                                     account_number: '',
+                                    qr_path: null,
+                                    qr_url: null,
+                                    qr: null,
                                 },
                             ])
                         }
@@ -256,6 +350,81 @@ function RejectButton({ invoice }: { invoice: AdminInvoice }) {
     );
 }
 
+/**
+ * Cancel an invoice issued by mistake, with a reason the owner is told.
+ */
+function CancelInvoiceButton({ invoice }: { invoice: AdminInvoice }) {
+    const [isOpen, setIsOpen] = useState(false);
+    const form = useForm({ reason: '' });
+
+    return (
+        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <DialogTrigger asChild>
+                <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-muted-foreground hover:text-destructive"
+                >
+                    Cancel
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+                <form
+                    className="space-y-4"
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        form.put(
+                            admin.billing.invoices.cancel(invoice.id).url,
+                            {
+                                preserveScroll: true,
+                                onSuccess: () => setIsOpen(false),
+                            },
+                        );
+                    }}
+                >
+                    <DialogHeader>
+                        <DialogTitle>Cancel {invoice.number}?</DialogTitle>
+                        <DialogDescription>
+                            {invoice.owner} won't owe it, and it can't pause
+                            their booking page. They're told why by email.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-1">
+                        <Input
+                            aria-label="Reason"
+                            placeholder="e.g. Issued twice by mistake"
+                            value={form.data.reason}
+                            onChange={(event) =>
+                                form.setData('reason', event.target.value)
+                            }
+                            maxLength={255}
+                            autoFocus
+                            required
+                        />
+                        <InputError message={form.errors.reason} />
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={() => setIsOpen(false)}
+                        >
+                            Keep it
+                        </Button>
+                        <Button
+                            type="submit"
+                            variant="destructive"
+                            disabled={form.processing}
+                        >
+                            Cancel invoice
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 export default function AdminBilling({
     invoices,
     status,
@@ -352,28 +521,67 @@ export default function AdminBilling({
                                             Ref {invoice.payment_reference}
                                         </p>
                                     )}
+                                    {invoice.cancel_reason && (
+                                        <p className="text-xs text-muted-foreground">
+                                            {invoice.cancel_reason}
+                                        </p>
+                                    )}
                                 </TableCell>
                                 <TableCell>
+                                    {['unpaid', 'rejected'].includes(
+                                        invoice.status,
+                                    ) && (
+                                        <div className="flex flex-wrap justify-end gap-2">
+                                            <CancelInvoiceButton
+                                                invoice={invoice}
+                                            />
+                                            <ConfirmDialog
+                                                trigger={
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                    >
+                                                        Mark paid
+                                                    </Button>
+                                                }
+                                                title={`Mark ${invoice.number} paid?`}
+                                                description="For a payment you received outside the app, like cash or a transfer sent without a screenshot. The owner is told it's paid."
+                                                confirmLabel="Mark paid"
+                                                onConfirm={() =>
+                                                    router.put(
+                                                        admin.billing.invoices.review(
+                                                            invoice.id,
+                                                        ).url,
+                                                        { decision: 'paid' },
+                                                        {
+                                                            preserveScroll: true,
+                                                        },
+                                                    )
+                                                }
+                                            />
+                                        </div>
+                                    )}
                                     {invoice.status === 'submitted' && (
                                         <div className="flex flex-wrap justify-end gap-2">
+                                            <CancelInvoiceButton
+                                                invoice={invoice}
+                                            />
                                             {invoice.has_proof && (
-                                                <Button
-                                                    size="sm"
-                                                    variant="ghost"
-                                                    asChild
+                                                <ImageLightbox
+                                                    src={
+                                                        admin.billing.invoices.proof(
+                                                            invoice.id,
+                                                        ).url
+                                                    }
+                                                    alt={`Transfer screenshot for ${invoice.number}`}
+                                                    label={`View transfer screenshot for ${invoice.number}`}
+                                                    className={buttonVariants({
+                                                        size: 'sm',
+                                                        variant: 'ghost',
+                                                    })}
                                                 >
-                                                    <a
-                                                        href={
-                                                            admin.billing.invoices.proof(
-                                                                invoice.id,
-                                                            ).url
-                                                        }
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                    >
-                                                        Screenshot
-                                                    </a>
-                                                </Button>
+                                                    Screenshot
+                                                </ImageLightbox>
                                             )}
                                             <RejectButton invoice={invoice} />
                                             <Button

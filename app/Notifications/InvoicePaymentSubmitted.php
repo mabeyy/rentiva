@@ -15,6 +15,9 @@ class InvoicePaymentSubmitted extends Notification implements ShouldQueue
 {
     use Queueable;
 
+    /** Skip quietly if the booking, car or invoice was deleted before it sent. */
+    public bool $deleteWhenMissingModels = true;
+
     public function __construct(public Invoice $invoice) {}
 
     /**
@@ -46,7 +49,7 @@ class InvoicePaymentSubmitted extends Notification implements ShouldQueue
     public function toArray(object $notifiable): array
     {
         return [
-            'action' => 'invoice_paid',
+            'action' => 'invoice_submitted',
             'title' => __('Payment to check'),
             'body' => __(':owner sent :amount', ['owner' => $this->ownerName(), 'amount' => $this->invoice->formattedAmount()]),
             'url' => route('admin.billing.index', ['status' => 'submitted'], absolute: false),
@@ -55,6 +58,6 @@ class InvoicePaymentSubmitted extends Notification implements ShouldQueue
 
     private function ownerName(): string
     {
-        return $this->invoice->owner->storefront?->name ?? $this->invoice->owner->name;
+        return $this->invoice->owner->storefront->name ?? $this->invoice->owner->name;
     }
 }

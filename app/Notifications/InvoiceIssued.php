@@ -12,6 +12,9 @@ class InvoiceIssued extends Notification implements ShouldQueue
 {
     use Queueable;
 
+    /** Skip quietly if the booking, car or invoice was deleted before it sent. */
+    public bool $deleteWhenMissingModels = true;
+
     public function __construct(public Invoice $invoice) {}
 
     /**
