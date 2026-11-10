@@ -85,6 +85,29 @@ export function describeMonths(months: number): string {
     return `${label} (${years} ${years === 1 ? 'year' : 'years'})`;
 }
 
+/** Rentiva's registered name and Data Protection Officer. */
+export type DataProtection = {
+    legalName: string;
+    dpoName: string | null;
+    dpoEmail: string;
+};
+
+/**
+ * The outside services that process personal data for Rentiva, named so
+ * people know where their data goes.
+ */
+export const serviceProviders = [
+    'Our hosting provider, which stores the database and files.',
+    'An email delivery provider, which sends booking and account emails.',
+    'A text message provider, which sends booking texts when the rental business has texts turned on.',
+    'Cloudflare, which checks that booking and sign-up forms are sent by a person and not a bot.',
+    'Google, only when a rental business connects Google Calendar, to add bookings to their calendar.',
+];
+
+/** The promise every notice makes about a breach, per NPC Circular 16-03. */
+export const breachPromise =
+    'If a breach puts your personal data at real risk, we will tell the National Privacy Commission and the people affected within 72 hours of finding out, as the law requires, along with what happened and what we are doing about it.';
+
 /** The rights every privacy notice lists under the Data Privacy Act. */
 export const dataPrivacyRights = [
     'Be informed about how your personal data is processed.',

@@ -1,10 +1,13 @@
 import { usePage } from '@inertiajs/react';
+import type { DataProtection } from '@/components/legal/legal-page';
 import {
     LegalList,
     LegalPage,
     LegalSection,
+    breachPromise,
     dataPrivacyRights,
     describeMonths,
+    serviceProviders,
 } from '@/components/legal/legal-page';
 import type { Storefront } from '@/types';
 
@@ -24,9 +27,11 @@ type PrivacyDetails = {
 export default function StorefrontPrivacy({
     lastUpdated,
     privacy,
+    dataProtection,
 }: {
     lastUpdated: string;
     privacy: PrivacyDetails;
+    dataProtection: DataProtection;
 }) {
     const { storefront, name: platformName } = usePage<{
         storefront: Storefront;
@@ -58,7 +63,15 @@ export default function StorefrontPrivacy({
                 <p>
                     {owner} uses {platformName} to run this booking page.{' '}
                     {platformName} stores and processes your booking on {owner}
-                    's behalf and only as instructed by them.
+                    's behalf and only as instructed by them. {platformName}'s
+                    Data Protection Officer can be reached at{' '}
+                    <a
+                        href={`mailto:${dataProtection.dpoEmail}`}
+                        className="font-medium text-foreground underline underline-offset-4"
+                    >
+                        {dataProtection.dpoEmail}
+                    </a>
+                    .
                 </p>
                 <p>
                     This notice is provided under the Data Privacy Act of 2012
@@ -90,6 +103,8 @@ export default function StorefrontPrivacy({
                         'To email you about your booking: confirmations, changes and payment updates.',
                         'To let you view, pay for or cancel your booking through the private link you are sent.',
                         'To check your identity and license when you collect the vehicle.',
+                        'To keep the booking form safe from spam and fraud.',
+                        `To let ${owner} keep a private note on a renter it had a problem with, such as an unpaid rental or damage. Only the business sees it, and it's removed after the same period as bookings.`,
                     ]}
                 />
                 <p>
@@ -101,15 +116,17 @@ export default function StorefrontPrivacy({
             <LegalSection heading="Who else sees it">
                 <LegalList
                     items={[
-                        `${platformName}, which hosts this booking page and stores your booking for ${owner}.`,
-                        'The email provider that delivers booking emails.',
+                        `Staff ${owner} gives access to their bookings.`,
+                        `${platformName}, which hosts this booking page and stores your booking for ${owner}, and the services it uses:`,
+                        ...serviceProviders.map((provider) => `– ${provider}`),
                         'Authorities, where the law requires it, or to establish or defend a legal claim.',
                     ]}
                 />
                 <p>
-                    Your details are never shown publicly. If you leave a
-                    review, only your star rating is used in the business's
-                    public rating.
+                    Your contact details are never shown publicly. If you leave
+                    a review, your star rating and comment appear on the
+                    business's page with your first name and last initial (like
+                    "Juan D."), and count toward its public rating.
                 </p>
             </LegalSection>
 
@@ -121,7 +138,10 @@ export default function StorefrontPrivacy({
                     </strong>{' '}
                     after your trip ends. After that, an automated nightly
                     process permanently removes your name, email address, mobile
-                    number, license number and notes.
+                    number, license number, license photo, delivery address,
+                    notes and messages about the booking, and photos from the
+                    pickup and return checks. Records of the emails and texts
+                    sent to you are deleted after 90 days.
                 </p>
                 {privacy.acceptsBankTransfer && (
                     <p>
@@ -130,7 +150,8 @@ export default function StorefrontPrivacy({
                             {privacy.proofRetentionDays}{' '}
                             {privacy.proofRetentionDays === 1 ? 'day' : 'days'}
                         </strong>{' '}
-                        after your trip, once the owner has checked the payment.
+                        after your trip, once the owner has checked the payment,
+                        or after a booking is cancelled.
                     </p>
                 )}
                 <p>
@@ -156,11 +177,14 @@ export default function StorefrontPrivacy({
             <LegalSection heading="How it is protected">
                 <p>
                     Bookings are stored on managed infrastructure and served
-                    over an encrypted connection. Only {owner}'s account can see
-                    your booking. The link to manage your booking contains a
-                    long random signature, and transfer screenshots are stored
-                    privately and shown only to the owner.
+                    over an encrypted connection. Only {owner} and the staff
+                    they give access to can see your booking; {platformName}'s
+                    team looks at it only to give support or when the law
+                    requires it. The link to manage your booking contains a long
+                    random signature, and license photos and transfer
+                    screenshots are stored privately.
                 </p>
+                <p>{breachPromise}</p>
             </LegalSection>
 
             <LegalSection heading="Changes to this notice">

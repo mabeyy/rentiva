@@ -11,7 +11,7 @@ use Inertia\Response;
 class TermsController extends Controller
 {
     /** When the terms last changed; shown at the top. */
-    private const string LAST_UPDATED = '2026-11-08';
+    private const string LAST_UPDATED = '2026-11-09';
 
     /**
      * The terms for renters and for the rental businesses that use Rentiva,

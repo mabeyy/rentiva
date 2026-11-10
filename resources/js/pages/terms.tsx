@@ -68,7 +68,7 @@ export default function Terms({
                         'Handle renters’ personal information only to run their rentals, as described in your privacy notice and the Data Privacy Act. Don’t share it or use it for anything else.',
                         `Plans are paid monthly or yearly by bank transfer. Each invoice is due ${daysToPay} days after it’s issued. If an invoice is more than ${graceDays} days overdue, your booking page stops taking online bookings until it’s paid; your account and data stay.`,
                         'Rentiva takes no commission on your bookings. Plan prices can change; a new price applies from your next invoice, and we’ll tell you before it does.',
-                        'Texts are sent through your own Semaphore account, and you pay Semaphore for them.',
+                        'Texts use prepaid text credits that you load and pay for separately from your plan.',
                         'You can stop anytime. Paid periods aren’t refunded, but your page keeps working until the period ends.',
                     ]}
                 />
