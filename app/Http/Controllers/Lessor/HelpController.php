@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Lessor;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Lessor\StoreSupportRequestRequest;
 use App\Models\Setting;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -27,6 +28,9 @@ class HelpController extends Controller
                 'response_hours' => (int) Setting::get(Setting::PriorityResponseHours),
             ] : null,
             'responseHours' => (int) Setting::get(Setting::PriorityResponseHours),
+            'topics' => collect(StoreSupportRequestRequest::TOPICS)->map(fn (string $label, string $value): array => ['value' => $value, 'label' => $label])->values(),
+            'replyTo' => ($request->attributes->get('staff') ?? $request->user())->email,
+            'messageLimits' => ['min' => StoreSupportRequestRequest::MESSAGE_MIN, 'max' => StoreSupportRequestRequest::MESSAGE_MAX],
         ]);
     }
 }

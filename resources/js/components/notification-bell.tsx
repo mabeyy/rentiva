@@ -1,12 +1,16 @@
 import { Link, router, usePage, usePoll } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
-import { formatDistanceToNowStrict, parseISO } from 'date-fns';
 import {
+    AlertTriangle,
     Bell,
     BellRing,
     CalendarClock,
+    CheckCircle2,
+    Clock,
+    Flag,
     FileWarning,
     Landmark,
+    LifeBuoy,
     MessageSquare,
     Receipt,
     Send,
@@ -20,6 +24,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { TimeAgo } from '@/components/time-ago';
 
 type OwnerAlert = {
     id: string;
@@ -45,7 +50,14 @@ const actionIcons: Record<string, LucideIcon> = {
     reviewed: MessageSquare,
     paper_expiring: FileWarning,
     invoice: Receipt,
-    invoice_paid: Receipt,
+    invoice_submitted: Receipt,
+    invoice_paid: CheckCircle2,
+    invoice_rejected: XCircle,
+    invoice_due: Clock,
+    invoice_overdue: AlertTriangle,
+    invoice_cancelled: XCircle,
+    support_request: LifeBuoy,
+    review_reported: Flag,
     change_requested: CalendarClock,
 };
 
@@ -110,7 +122,9 @@ function BellMenu({
     }, [items, permission]);
 
     function enableDesktopAlerts(): void {
-        Notification.requestPermission().then(setPermission);
+        Notification.requestPermission()
+            .then(setPermission)
+            .catch(() => setPermission('denied'));
     }
 
     return (
@@ -120,6 +134,7 @@ function BellMenu({
                     variant="ghost"
                     size="icon"
                     className="relative rounded-full"
+                    tooltip="Notifications"
                     aria-label={
                         unread > 0
                             ? `Notifications, ${unread} unread`
@@ -194,12 +209,10 @@ function BellMenu({
                                             </span>
                                             {item.created_at && (
                                                 <span className="block text-[11px] text-muted-foreground/80">
-                                                    {formatDistanceToNowStrict(
-                                                        parseISO(
-                                                            item.created_at,
-                                                        ),
-                                                        { addSuffix: true },
-                                                    )}
+                                                    <TimeAgo
+                                                        date={item.created_at}
+                                                        strict
+                                                    />
                                                 </span>
                                             )}
                                         </span>

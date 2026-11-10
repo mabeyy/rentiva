@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\ActivityController;
+use App\Http\Controllers\Admin\AdminActionController;
 use App\Http\Controllers\Admin\BillingController;
 use App\Http\Controllers\Admin\BookingController;
 use App\Http\Controllers\Admin\CarController;
@@ -12,7 +13,9 @@ use App\Http\Controllers\Admin\LessorRetentionController;
 use App\Http\Controllers\Admin\LessorSubscriptionController;
 use App\Http\Controllers\Admin\NotificationController;
 use App\Http\Controllers\Admin\PlanController;
+use App\Http\Controllers\Admin\ReviewController;
 use App\Http\Controllers\Admin\SettingController;
+use App\Http\Controllers\Admin\SupportRequestController;
 use App\Http\Controllers\Lessor\ConnectionController;
 use Illuminate\Support\Facades\Route;
 
@@ -22,16 +25,18 @@ Route::middleware(['auth', 'verified', 'role:admin'])
     ->group(function () {
         Route::get('dashboard', DashboardController::class)->name('dashboard');
         Route::get('activity', ActivityController::class)->name('activity');
+        Route::get('log', AdminActionController::class)->name('log');
 
         Route::resource('lessors', LessorController::class)->only(['index', 'show', 'update']);
         Route::put('lessors/{lessor}/retention', LessorRetentionController::class)->name('lessors.retention.update');
 
         // Admins can set up an owner's email, SMS and calendar on their behalf.
         Route::prefix('lessors/{lessor}/connections')->name('lessors.connections.')->controller(ConnectionController::class)->group(function () {
-            Route::get('email', 'email')->name('email');
+            Route::get('notifications', 'notifications')->name('notifications');
+            Route::get('email', 'redirectToNotifications');
             Route::put('email', 'updateEmail')->name('email.update');
             Route::post('email/test', 'testEmail')->middleware('throttle:6,1')->name('email.test');
-            Route::get('sms', 'sms')->name('sms');
+            Route::get('sms', 'redirectToNotifications');
             Route::put('sms', 'updateSms')->name('sms.update');
             Route::post('sms/test', 'testSms')->middleware('throttle:6,1')->name('sms.test');
             Route::get('calendar', 'calendar')->name('calendar');
@@ -54,6 +59,13 @@ Route::middleware(['auth', 'verified', 'role:admin'])
         Route::post('notifications/read', [NotificationController::class, 'readAll'])->name('notifications.read');
         Route::put('billing/invoices/{invoice}', [BillingController::class, 'review'])->name('billing.invoices.review');
         Route::get('billing/invoices/{invoice}/proof', [BillingController::class, 'proof'])->name('billing.invoices.proof');
+        Route::put('billing/invoices/{invoice}/cancel', [BillingController::class, 'cancel'])->name('billing.invoices.cancel');
+        Route::get('reviews', [ReviewController::class, 'index'])->name('reviews.index');
+        Route::put('reviews/{review}', [ReviewController::class, 'update'])->name('reviews.update');
+        Route::get('support', [SupportRequestController::class, 'index'])->name('support.index');
+        Route::put('support/{supportRequest}', [SupportRequestController::class, 'update'])->name('support.update');
+        Route::get('support/{supportRequest}/screenshot', [SupportRequestController::class, 'screenshot'])->name('support.screenshot');
         Route::put('settings', [SettingController::class, 'update'])->name('settings.update');
         Route::put('settings/support', [SettingController::class, 'updateSupport'])->name('settings.support.update');
+        Route::put('settings/data-protection', [SettingController::class, 'updateDataProtection'])->name('settings.data-protection.update');
     });

@@ -17,21 +17,20 @@ import { navGroupsByRole, visibleNavGroups } from '@/lib/navigation';
 import { dashboard, home } from '@/routes';
 import type { NavItem, StaffPermission } from '@/types';
 
-const footerNavItems: NavItem[] = [
-    {
-        title: 'View public site',
-        href: home(),
-        icon: Globe,
-    },
-];
-
 export function AppSidebar() {
-    const { auth, workspace } = usePage<{
+    const { auth, workspace, publicSiteUrl } = usePage<{
         workspace?: {
             owner_name: string;
             permissions: StaffPermission[];
         } | null;
+        /** The owner's booking page; null for admins or before it's set up. */
+        publicSiteUrl?: string | null;
     }>().props;
+    const footerNavItems: NavItem[] = [
+        publicSiteUrl
+            ? { title: 'View booking page', href: publicSiteUrl, icon: Globe }
+            : { title: 'View public site', href: home(), icon: Globe },
+    ];
     const navGroups = visibleNavGroups(
         navGroupsByRole[auth.user.role],
         workspace?.permissions ?? null,

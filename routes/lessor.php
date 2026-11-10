@@ -22,6 +22,7 @@ use App\Http\Controllers\Lessor\DashboardController;
 use App\Http\Controllers\Lessor\ExportController;
 use App\Http\Controllers\Lessor\HelpController;
 use App\Http\Controllers\Lessor\MainPickupLocationController;
+use App\Http\Controllers\Lessor\MaintenanceController;
 use App\Http\Controllers\Lessor\ManualBookingController;
 use App\Http\Controllers\Lessor\NotificationController;
 use App\Http\Controllers\Lessor\PaymentSettingController;
@@ -32,6 +33,7 @@ use App\Http\Controllers\Lessor\RenterController;
 use App\Http\Controllers\Lessor\RevenueController;
 use App\Http\Controllers\Lessor\ReviewController;
 use App\Http\Controllers\Lessor\StorefrontController;
+use App\Http\Controllers\Lessor\SupportRequestController;
 use App\Http\Controllers\Lessor\TeamController;
 use App\Http\Controllers\Lessor\TransferController;
 use Illuminate\Support\Facades\Route;
@@ -44,12 +46,13 @@ Route::middleware(['auth', 'verified', 'workspace', 'role:lessor'])
         Route::get('dashboard', DashboardController::class)->name('dashboard');
         Route::get('activity', ActivityController::class)->name('activity');
         Route::get('help', HelpController::class)->name('help');
+        Route::post('help', SupportRequestController::class)->middleware('throttle:5,10')->name('help.store');
         Route::get('notifications/{notification}', [NotificationController::class, 'show'])->name('notifications.show');
         Route::post('notifications/read', [NotificationController::class, 'readAll'])->name('notifications.read');
 
         Route::middleware('permission:bookings')->group(function () {
             Route::get('bookings', [BookingController::class, 'index'])->name('bookings.index');
-            Route::get('bookings/export', [ExportController::class, 'bookings'])->name('bookings.export');
+            Route::get('bookings/export', [ExportController::class, 'bookings'])->middleware('permission:payments')->name('bookings.export');
             Route::get('bookings/calendar', [BookingController::class, 'calendar'])->name('bookings.calendar');
             Route::get('bookings/blocked', [CarBlockController::class, 'index'])->name('bookings.blocked');
             Route::get('bookings/create', [ManualBookingController::class, 'create'])->name('bookings.create');
@@ -61,11 +64,11 @@ Route::middleware(['auth', 'verified', 'workspace', 'role:lessor'])
             Route::get('bookings/{booking}/receipt', [BookingDocumentController::class, 'receipt'])->name('bookings.receipt');
             Route::get('bookings/{booking}/agreement', [BookingDocumentController::class, 'agreement'])->name('bookings.agreement');
             Route::put('bookings/{booking}/trip', [BookingChangeController::class, 'update'])->name('bookings.trip.update');
-            Route::post('bookings/{booking}/charges', [BookingChargeController::class, 'store'])->name('bookings.charges.store');
-            Route::delete('bookings/{booking}/charges/{charge}', [BookingChargeController::class, 'destroy'])->name('bookings.charges.destroy');
-            Route::put('bookings/{booking}/deposit', [BookingDepositController::class, 'update'])->name('bookings.deposit.update');
+            Route::post('bookings/{booking}/charges', [BookingChargeController::class, 'store'])->middleware('permission:payments')->name('bookings.charges.store');
+            Route::delete('bookings/{booking}/charges/{charge}', [BookingChargeController::class, 'destroy'])->middleware('permission:payments')->name('bookings.charges.destroy');
+            Route::put('bookings/{booking}/deposit', [BookingDepositController::class, 'update'])->middleware('permission:payments')->name('bookings.deposit.update');
             Route::post('bookings/{booking}/inspections', [BookingInspectionController::class, 'store'])->name('bookings.inspections.store');
-            Route::put('bookings/{booking}/refund', [BookingRefundController::class, 'update'])->name('bookings.refund.update');
+            Route::put('bookings/{booking}/refund', [BookingRefundController::class, 'update'])->middleware('permission:payments')->name('bookings.refund.update');
             Route::post('bookings/{booking}/change-request/approve', [BookingChangeRequestController::class, 'approve'])->name('bookings.change-request.approve');
             Route::post('bookings/{booking}/change-request/decline', [BookingChangeRequestController::class, 'decline'])->name('bookings.change-request.decline');
             Route::get('bookings/{booking}/inspections/{inspection}/photos/{index}', [BookingInspectionController::class, 'photo'])->name('bookings.inspections.photo')->whereNumber('index');
@@ -85,6 +88,7 @@ Route::middleware(['auth', 'verified', 'workspace', 'role:lessor'])
             Route::resource('pickup-locations', PickupLocationController::class)->only(['index', 'store', 'update', 'destroy']);
             Route::put('pickup-locations/{pickupLocation}/main', MainPickupLocationController::class)->name('pickup-locations.main');
             Route::resource('seasons', PeakSeasonController::class)->only(['index', 'store', 'update', 'destroy']);
+            Route::get('maintenance', MaintenanceController::class)->name('maintenance');
         });
 
         Route::middleware('permission:payments')->group(function () {
@@ -97,6 +101,7 @@ Route::middleware(['auth', 'verified', 'workspace', 'role:lessor'])
         Route::middleware('permission:customers')->group(function () {
             Route::get('reviews', [ReviewController::class, 'index'])->name('reviews.index');
             Route::put('reviews/{review}/reply', [ReviewController::class, 'reply'])->name('reviews.reply');
+            Route::put('reviews/{review}/report', [ReviewController::class, 'report'])->middleware('throttle:10,1')->name('reviews.report');
             Route::get('renters', [RenterController::class, 'index'])->name('renters.index');
             Route::get('renters/export', [ExportController::class, 'renters'])->name('renters.export');
             Route::get('renters/{phoneKey}', [RenterController::class, 'show'])->name('renters.show')->where('phoneKey', '0\d{10}');
@@ -115,6 +120,9 @@ Route::middleware(['auth', 'verified', 'workspace', 'role:lessor'])
             Route::put('payments', [PaymentSettingController::class, 'update'])->name('payments.update');
             Route::get('billing', [BillingController::class, 'index'])->name('billing.index');
             Route::put('billing', [BillingController::class, 'update'])->name('billing.update');
+            Route::delete('billing', [BillingController::class, 'cancel'])->name('billing.cancel');
+            Route::post('billing/resume', [BillingController::class, 'resume'])->name('billing.resume');
+            Route::get('billing/invoices/{invoice}', [BillingController::class, 'invoice'])->name('billing.invoices.show');
             Route::post('billing/invoices/{invoice}/payment', [BillingController::class, 'pay'])->name('billing.invoices.pay');
             Route::get('team', [TeamController::class, 'index'])->name('team.index');
             Route::post('team', [TeamController::class, 'store'])->name('team.store');
@@ -123,8 +131,9 @@ Route::middleware(['auth', 'verified', 'workspace', 'role:lessor'])
             Route::delete('team/{member}', [TeamController::class, 'destroy'])->name('team.destroy');
 
             Route::prefix('connections')->name('connections.')->controller(ConnectionController::class)->group(function () {
-                Route::get('email', 'email')->name('email');
-                Route::get('sms', 'sms')->name('sms');
+                Route::get('notifications', 'notifications')->name('notifications');
+                Route::get('email', 'redirectToNotifications');
+                Route::get('sms', 'redirectToNotifications');
                 Route::get('calendar', 'calendar')->name('calendar');
                 Route::put('calendar', 'updateCalendar')->name('calendar.update');
                 Route::post('calendar/test', 'testCalendar')->middleware('throttle:6,1')->name('calendar.test');
