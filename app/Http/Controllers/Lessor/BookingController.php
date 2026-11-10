@@ -6,15 +6,18 @@ use App\Actions\Bookings\ChangeBookingStatus;
 use App\Actions\Renters\GroupRenters;
 use App\Concerns\ProvidesBlockOptions;
 use App\Enums\BookingStatus;
+use App\Enums\CarStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Lessor\UpdateBookingStatusRequest;
 use App\Http\Resources\BookingEventResource;
 use App\Http\Resources\BookingResource;
 use App\Http\Resources\CarBlockResource;
 use App\Models\Booking;
+use App\Models\BookingEvent;
 use App\Models\Car;
 use App\Models\CarBlock;
 use App\Models\PeakSeason;
+use App\Models\TeamMember;
 use Carbon\CarbonInterface;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -38,6 +41,7 @@ class BookingController extends Controller
         ])['status'] ?? null;
 
         return Inertia::render('lessor/bookings/index', [
+            'bookingForm' => Inertia::optional(fn (): array => ManualBookingController::formOptions($request)),
             'bookings' => BookingResource::collection(
                 $request->user()->bookings()
                     ->when($status, fn ($query, string $status) => $query->inStatus($status))
@@ -63,12 +67,16 @@ class BookingController extends Controller
 
         return Inertia::render('lessor/bookings/show', [
             'booking' => BookingResource::make($booking),
-            'events' => BookingEventResource::collection($booking->events->each->setRelation('booking', $booking)),
+            // Staff without the payments permission don't see money entries.
+            'events' => BookingEventResource::collection($booking->events
+                ->when(! TeamMember::actingCan('payments'), fn ($events) => $events->reject(fn (BookingEvent $event): bool => in_array($event->action, BookingEvent::MONEY_ACTIONS, true)))
+                ->values()
+                ->each->setRelation('booking', $booking)),
             'review' => $booking->review?->only(['id', 'rating', 'comment', 'owner_reply', 'created_at']),
             'cars' => $booking->car->owner->cars()->oldest('make')->get()->map(fn (Car $car): array => [
                 'slug' => $car->slug,
                 'name' => $car->name,
-                ...$car->only(['daily_rate', 'security_deposit', 'weekly_discount', 'monthly_discount', 'delivery_fee', 'driver_daily_rate']),
+                ...$car->only(['daily_rate', 'deposit_percent', 'weekly_discount', 'monthly_discount', 'delivery_fee', 'driver_daily_rate']),
                 'booked_ranges' => $car->bookings()->reserving()->whereKeyNot($booking->id)->whereDate('end_date', '>', today())
                     ->get(['start_date', 'end_date'])
                     ->map(fn (Booking $other): array => ['start_date' => $other->start_date->toDateString(), 'end_date' => $other->end_date->toDateString()])
@@ -76,8 +84,6 @@ class BookingController extends Controller
                     ->values(),
             ]),
             'chargeLabels' => BookingChargeController::SUGGESTED_LABELS,
-            'businessName' => $booking->car->owner->storefront?->name ?? $booking->car->owner->name,
-            'emailsRenter' => $booking->car->owner->planIncludes('email'),
             'seasons' => ! $booking->car->owner->planIncludes('peak_pricing') ? [] : $booking->car->owner->peakSeasons()->upcoming()->get()->map(fn (PeakSeason $season): array => PeakSeasonController::present($season)),
             'renter' => ($renter = $booking->renter_phone_key ? app(GroupRenters::class)->find($booking->car->owner, $booking->renter_phone_key) : null) ? [
                 'key' => $renter['key'],
@@ -103,6 +109,7 @@ class BookingController extends Controller
         $gridEnd = $selected->copy()->endOfMonth()->endOfWeek(CarbonInterface::SATURDAY);
 
         return Inertia::render('lessor/bookings/calendar', [
+            'bookingForm' => Inertia::optional(fn (): array => ManualBookingController::formOptions($request)),
             'bookings' => BookingResource::collection(
                 $request->user()->bookings()
                     ->inStatus(BookingStatus::Pending, BookingStatus::Confirmed, BookingStatus::Completed)
@@ -122,6 +129,8 @@ class BookingController extends Controller
                     ->get(),
             ),
             'blockOptions' => $this->blockOptions($request->user()),
+            // Live cars, so each day can show how much of the fleet is taken.
+            'fleetSize' => $request->user()->cars()->where('status', CarStatus::Active)->count(),
             'selectedDate' => $selected->toDateString(),
             'today' => today()->toDateString(),
         ]);

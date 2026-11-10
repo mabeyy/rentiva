@@ -26,6 +26,7 @@ class CarBlockController extends Controller
         $carSlug = $request->validate(['car' => ['nullable', 'string', 'max:120']])['car'] ?? null;
 
         return Inertia::render('lessor/bookings/blocked', [
+            'bookingForm' => Inertia::optional(fn (): array => ManualBookingController::formOptions($request)),
             'blocks' => CarBlockResource::collection(
                 CarBlock::query()
                     ->whereHas('car', fn ($car) => $car->where('owner_id', $request->user()->id)

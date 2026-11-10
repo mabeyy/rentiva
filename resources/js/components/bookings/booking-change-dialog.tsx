@@ -33,7 +33,7 @@ export type ChangeableCar = Pick<
     | 'slug'
     | 'name'
     | 'daily_rate'
-    | 'security_deposit'
+    | 'deposit_percent'
     | 'weekly_discount'
     | 'monthly_discount'
     | 'delivery_fee'

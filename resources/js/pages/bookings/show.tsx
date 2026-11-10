@@ -1,6 +1,7 @@
 import type { BookingHost } from '@/components/bookings/booking-details';
 import { BookingDetails } from '@/components/bookings/booking-details';
 import type { TransferDetails } from '@/components/bookings/booking-payment-card';
+import type { ChangeRequestCalendar } from '@/components/bookings/renter-change-request';
 import type { TripReview } from '@/components/bookings/trip-review';
 import type { Booking } from '@/types';
 
@@ -16,6 +17,8 @@ export default function BookingShow(props: {
     review: TripReview | null;
     reviewUrl: string | null;
     changeRequestUrl: string | null;
+    changeRequestCalendar: ChangeRequestCalendar;
+    withdrawChangeRequestUrl: string | null;
 }) {
     return <BookingDetails {...props} />;
 }

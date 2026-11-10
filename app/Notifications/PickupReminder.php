@@ -10,10 +10,14 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Number;
 
 class PickupReminder extends Notification implements ShouldQueue
 {
     use Queueable;
+
+    /** Skip quietly if the booking, car or invoice was deleted before it sent. */
+    public bool $deleteWhenMissingModels = true;
 
     /**
      * Create a new notification instance. `$hoursBefore` is 24 or 2.
@@ -62,13 +66,14 @@ class PickupReminder extends Notification implements ShouldQueue
             'total' => $booking->formattedTotal(),
         ]));
 
-        if ($booking->payment_method === PaymentMethod::PayAtPickup) {
-            $message->line(__('Please bring the total to pay at pickup, plus your driver’s license.'));
-        } elseif ($booking->payment_status !== PaymentStatus::Paid) {
-            $message->line(__('Your bank transfer has not been confirmed yet. Please check your booking.'));
-        } else {
-            $message->line(__('Your payment is confirmed. Please bring your driver’s license.'));
-        }
+        $balance = Number::currency($booking->balanceDue() / 100, 'PHP', 'en_PH');
+
+        $message->line(match (true) {
+            $booking->payment_status === PaymentStatus::Paid && $booking->balanceDue() > 0 => __('Please bring the remaining :balance to pay at pickup, plus your driver’s license.', ['balance' => $balance]),
+            $booking->payment_status === PaymentStatus::Paid => __('You’re all paid. Please bring your driver’s license.'),
+            $booking->payment_method === PaymentMethod::PayAtPickup => __('Please bring :balance to pay at pickup, plus your driver’s license.', ['balance' => $balance]),
+            default => __('Your bank transfer has not been confirmed yet. Please check your booking.'),
+        });
 
         return $message->action(__('View booking'), $booking->manageUrl());
     }

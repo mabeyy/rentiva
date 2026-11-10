@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests\Public;
 
+use App\Actions\Bookings\CheckBookingRules;
+use App\Enums\BookingStatus;
 use App\Enums\PaymentMethod;
 use App\Models\Booking;
 use App\Models\Car;
@@ -35,7 +37,7 @@ class StoreBookingRequest extends FormRequest
     {
         $this->merge([
             'renter_email' => Str::lower(trim((string) $this->input('renter_email'))),
-            'payment_method' => $this->input('payment_method') ?? $this->acceptedPaymentMethods()[0]?->value,
+            'payment_method' => $this->input('payment_method') ?? ($this->acceptedPaymentMethods()[0] ?? null)?->value,
             'with_delivery' => $this->boolean('with_delivery'),
             'with_driver' => $this->boolean('with_driver'),
         ]);
@@ -107,20 +109,24 @@ class StoreBookingRequest extends FormRequest
         return [function (Validator $validator): void {
             $storefront = $this->car()->owner->storefront;
 
+            // One open request per renter per car, so nobody can fill a car's
+            // calendar with requests the owner never asked for.
+            if ($this->filled('renter_email') && $this->car()->bookings()->where('status', BookingStatus::Pending)->where('renter_email', $this->string('renter_email'))->exists()) {
+                $validator->errors()->add('renter_email', __('You already have a request for this car waiting for the owner. Check your email for its link.'));
+            }
+
             if (! $storefront || $validator->errors()->hasAny(['start_date', 'end_date'])) {
                 return;
             }
 
-            $startDate = CarbonImmutable::parse($this->string('start_date'));
-            $days = (int) $startDate->diffInDays(CarbonImmutable::parse($this->string('end_date')));
-            $pickupAt = CarbonImmutable::parse("{$startDate->toDateString()} {$storefront->pickup_time}", Booking::PICKUP_TIMEZONE);
+            $problem = app(CheckBookingRules::class)->firstProblem(
+                $storefront,
+                CarbonImmutable::parse($this->string('start_date')),
+                CarbonImmutable::parse($this->string('end_date')),
+            );
 
-            if ($days < $storefront->min_rental_days) {
-                $validator->errors()->add('end_date', trans_choice('Book at least :count day.|Book at least :count days.', $storefront->min_rental_days));
-            } elseif ($storefront->advance_notice_hours > 0 && $pickupAt->lt(now()->addHours($storefront->advance_notice_hours))) {
-                $validator->errors()->add('start_date', trans_choice('Book at least :count hour before pickup.|Book at least :count hours before pickup.', $storefront->advance_notice_hours));
-            } elseif ($startDate->gt(today()->addDays($storefront->max_advance_days))) {
-                $validator->errors()->add('start_date', __('Bookings open :days days ahead.', ['days' => $storefront->max_advance_days]));
+            if ($problem) {
+                $validator->errors()->add(...$problem);
             }
         }];
     }

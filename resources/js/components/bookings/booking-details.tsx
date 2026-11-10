@@ -15,10 +15,11 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { formatDateRange } from '@/lib/format';
+import { formatDateRange, formatPeso } from '@/lib/format';
 import { totalLabelFor } from '@/lib/payment';
 import type { Booking } from '@/types';
 import type { RouteDefinition } from '@/wayfinder';
+import type { ChangeRequestCalendar } from '@/components/bookings/renter-change-request';
 
 export type BookingHost = { name: string; email: string; phone: string | null };
 
@@ -31,6 +32,36 @@ const statusMessages: Record<string, string> = {
     cancelled: 'This booking was cancelled.',
     completed: 'Trip completed. Thanks for renting with us!',
 };
+
+/**
+ * The line under the status. A confirmed bank-transfer booking still has to
+ * be paid (or is being checked), so it says so instead of "pay at pickup".
+ */
+function statusMessage(booking: Booking): string {
+    if (booking.status.value !== 'confirmed') {
+        return statusMessages[booking.status.value];
+    }
+
+    if (booking.payment_method.value !== 'bank_transfer') {
+        return booking.payment_status.value === 'paid'
+            ? `Confirmed and paid. Contact the owner below to arrange pickup.${booking.balance_due > 0 ? ' The rest is paid at pickup.' : ''}`
+            : statusMessages.confirmed;
+    }
+
+    const rest = booking.down_payment > 0 ? ' The rest is paid at pickup.' : '';
+
+    switch (booking.payment_status.value) {
+        case 'paid':
+            return `Confirmed and paid. Contact the owner below to arrange pickup.${rest}`;
+        case 'submitted':
+            return 'Confirmed! The owner is checking your transfer. Contact them below to arrange pickup.';
+        default:
+            // Bookings the owner added have no deadline, so nothing is at risk.
+            return booking.payment_due_at
+                ? `Confirmed! Send your ${booking.down_payment > 0 ? 'down payment' : 'payment'} below to keep these dates, then contact the owner to arrange pickup.${rest}`
+                : `Confirmed! Send your ${booking.down_payment > 0 ? 'down payment' : 'payment'} below, then contact the owner to arrange pickup.${rest}`;
+    }
+}
 
 /**
  * A guest's booking: status, car, price, contact and cancellation.
@@ -46,7 +77,11 @@ export function BookingDetails({
     reviewUrl,
     carHref,
     changeRequestUrl = null,
+    changeRequestCalendar = null,
+    withdrawChangeRequestUrl = null,
 }: {
+    changeRequestCalendar?: ChangeRequestCalendar;
+    withdrawChangeRequestUrl?: string | null;
     /** Signed URL for asking the owner to move the dates. */
     changeRequestUrl?: string | null;
     booking: Booking;
@@ -88,9 +123,12 @@ export function BookingDetails({
                 <Alert>
                     <AlertTitle>{booking.status.label}</AlertTitle>
                     <AlertDescription>
-                        {statusMessages[booking.status.value]}
+                        {statusMessage(booking)}
                         {booking.decline_reason &&
                             ` Reason: ${booking.decline_reason}`}
+                        {booking.status.value === 'cancelled' &&
+                            booking.cancel_reason &&
+                            ` Reason: ${booking.cancel_reason}`}
                     </AlertDescription>
                 </Alert>
 
@@ -176,6 +214,8 @@ export function BookingDetails({
                 <RenterChangeRequest
                     booking={booking}
                     changeRequestUrl={changeRequestUrl}
+                    calendar={changeRequestCalendar}
+                    withdrawUrl={withdrawChangeRequestUrl}
                 />
 
                 <TripReviewCard review={review} reviewUrl={reviewUrl} />
@@ -197,7 +237,11 @@ export function BookingDetails({
                             </Button>
                         }
                         title="Cancel this booking?"
-                        description="The owner will be notified and the dates released. This cannot be undone."
+                        description={
+                            booking.amount_paid > 0
+                                ? `The owner will be notified and the dates released. You paid ${formatPeso(booking.amount_paid)}: the owner handles refunds under their cancellation policy. This can't be undone.`
+                                : "The owner will be notified and the dates released. This can't be undone."
+                        }
                         cancelLabel="Keep booking"
                         confirmLabel="Cancel booking"
                         onConfirm={() =>

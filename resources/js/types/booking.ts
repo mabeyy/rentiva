@@ -2,7 +2,11 @@ import type { Car } from '@/types/car';
 import type { Option } from '@/types/common';
 
 export type BookingStatus =
-    'pending' | 'confirmed' | 'declined' | 'cancelled' | 'completed';
+    | 'pending'
+    | 'confirmed'
+    | 'declined'
+    | 'cancelled'
+    | 'completed';
 
 export type PaymentMethod = 'pickup' | 'bank_transfer';
 
@@ -48,6 +52,8 @@ export type Booking = {
     transfer_amount: number;
     /** Still to pay at pickup. */
     balance_due: number;
+    /** Paid over the total, e.g. after shorter dates: to refund. */
+    overpaid: number;
     deposit_collected_at: string | null;
     deposit_returned_amount: number | null;
     deposit_returned_at: string | null;
@@ -78,6 +84,7 @@ export type Booking = {
     next_statuses: Option<BookingStatus>[];
     notes: string | null;
     decline_reason: string | null;
+    cancel_reason: string | null;
     payment_method: Option<PaymentMethod>;
     payment_status: Option<PaymentStatus>;
     /** When an unpaid bank transfer booking is released. */

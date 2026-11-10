@@ -40,13 +40,14 @@ class BookingController extends Controller
         $booking->load(['car.coverImage', 'car.owner.storefront.pickupLocations', 'review']);
         $owner = $booking->car->owner;
         $storefront = $owner->storefront;
+        $canRequestChange = in_array($booking->status, [BookingStatus::Pending, BookingStatus::Confirmed], true) && $booking->change_request === null;
 
         return Inertia::render($storefront ? 'storefront/booking' : 'bookings/show', [
             'storefront' => $storefront ? StorefrontResource::make($storefront) : null,
             'booking' => BookingResource::make($booking),
-            'host' => $booking->status === BookingStatus::Confirmed
-                ? ['name' => $owner->name, 'email' => $owner->email, 'phone' => $owner->phone]
-                : null,
+            // Renters can always reach the owner: while waiting, during the trip,
+            // and after it ends or is cancelled (e.g. about a refund).
+            'host' => ['name' => $storefront->name ?? $owner->name, 'email' => $storefront->notification_email ?? $owner->email, 'phone' => $storefront->phone ?? $owner->phone],
             'cancelUrl' => $booking->renterCancellationBlockedReason() === null
                 ? URL::signedRoute('bookings.destroy', $booking)
                 : null,
@@ -55,8 +56,21 @@ class BookingController extends Controller
                 ? $booking->renterCancellationBlockedReason()
                 : null,
             'payment' => $this->paymentDetails($booking),
-            'changeRequestUrl' => in_array($booking->status, [BookingStatus::Pending, BookingStatus::Confirmed], true) && $booking->change_request === null
+            'changeRequestUrl' => $canRequestChange
                 ? URL::signedRoute('bookings.change-request.store', $booking)
+                : null,
+            // What the date picker needs to offer only dates the owner could accept.
+            'changeRequestCalendar' => $canRequestChange && $storefront ? [
+                'booked_ranges' => $booking->car->upcomingBookedRanges(except: $booking),
+                'rules' => [
+                    'min_days' => $storefront->min_rental_days,
+                    'notice_hours' => $storefront->advance_notice_hours,
+                    'max_advance_days' => $storefront->max_advance_days,
+                    'pickup_time' => $storefront->pickup_time,
+                ],
+            ] : null,
+            'withdrawChangeRequestUrl' => $booking->change_request !== null
+                ? URL::signedRoute('bookings.change-request.destroy', $booking)
                 : null,
             'review' => $booking->review?->only(['rating', 'comment', 'owner_reply']),
             'reviewUrl' => $booking->isReviewable()
@@ -78,7 +92,13 @@ class BookingController extends Controller
             (string) $booking->renterCancellationBlockedReason(),
         );
 
-        $changeBookingStatus->handle($booking, BookingStatus::Cancelled);
+        if (! $booking->status->canTransitionTo(BookingStatus::Cancelled)) {
+            Inertia::flash('toast', ['type' => 'info', 'message' => __('This booking is already :status.', ['status' => strtolower($booking->status->label())])]);
+
+            return redirect()->to($booking->manageUrl());
+        }
+
+        $changeBookingStatus->handle($booking, BookingStatus::Cancelled, __('Cancelled by the renter.'));
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Your booking was cancelled.')]);
 

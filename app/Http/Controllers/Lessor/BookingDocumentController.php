@@ -26,6 +26,9 @@ class BookingDocumentController extends Controller
         return $this->document('documents.agreement', $booking);
     }
 
+    /**
+     * @param  view-string  $view
+     */
     private function document(string $view, Booking $booking): View
     {
         Gate::authorize('update', $booking);
@@ -40,8 +43,8 @@ class BookingDocumentController extends Controller
             'car' => $booking->car,
             'owner' => $owner,
             'storefront' => $storefront,
-            'business' => $storefront?->name ?? $owner->name,
-            'brand' => $storefront?->brand_color ?? '#e8590c',
+            'business' => $storefront->name ?? $owner->name,
+            'brand' => $storefront->brand_color ?? '#e8590c',
             'address' => $mainLocation ? "{$mainLocation->address}, {$mainLocation->city}" : $storefront?->city,
             'peso' => fn (int $centavos): string => (string) Number::currency($centavos / 100, 'PHP', 'en_PH'),
         ]);

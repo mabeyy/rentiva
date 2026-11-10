@@ -55,7 +55,11 @@ class SyncBookingToCalendar
      */
     private function event(Booking $booking): array
     {
-        $paid = $booking->payment_status === PaymentStatus::Paid ? ' · Paid' : '';
+        $paid = match (true) {
+            $booking->payment_status !== PaymentStatus::Paid => '',
+            $booking->balanceDue() > 0 => ' · Part paid',
+            default => ' · Paid',
+        };
 
         return [
             'summary' => "{$booking->car->name} · {$booking->renter_name}{$paid}",

@@ -27,6 +27,7 @@ import { cn } from '@/lib/utils';
 import { terms } from '@/routes';
 import storefronts from '@/routes/storefronts';
 import type { Car, PaymentMethod, Storefront } from '@/types';
+import { FilePicker } from '@/components/file-picker';
 
 export function BookingRequestDialog({
     car,
@@ -42,6 +43,13 @@ export function BookingRequestDialog({
     const storefront = usePage<{ storefront?: Storefront }>().props.storefront;
     const paymentMethods = storefront?.payment_methods ?? defaultPaymentMethods;
     const policy = storefront?.payment_policy;
+    const damageFee = storefront?.damage_participation_fee ?? null;
+    const damagePolicy = storefront?.damage_policy;
+    const hasDamageTerms = (damageFee ?? 0) > 0 || Boolean(damagePolicy);
+    const agreedPolicies = [
+        policy && 'payment & cancellation policy',
+        hasDamageTerms && 'damage terms',
+    ].filter(Boolean);
     const [paymentMethod, setPaymentMethod] = useState(paymentMethods[0].value);
     const [withDelivery, setWithDelivery] = useState(false);
     const [withDriver, setWithDriver] = useState(false);
@@ -149,20 +157,13 @@ export function BookingRequestDialog({
                                     error={errors.license_photo}
                                     hint="Only the owner sees it."
                                 >
-                                    <label
-                                        htmlFor="license_photo"
-                                        className="flex h-9 cursor-pointer items-center gap-2 rounded-md border px-3 text-sm text-muted-foreground transition-colors hover:border-foreground/30 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring/50"
-                                    >
-                                        <IdCard className="size-4 shrink-0" />
-                                        <input
-                                            id="license_photo"
-                                            name="license_photo"
-                                            type="file"
-                                            accept="image/jpeg,image/png,image/webp"
-                                            required={requiresLicensePhoto}
-                                            className="w-full text-xs file:mr-2 file:rounded file:border-0 file:bg-muted file:px-2 file:py-0.5 file:text-xs file:font-medium"
-                                        />
-                                    </label>
+                                    <FilePicker
+                                        id="license_photo"
+                                        name="license_photo"
+                                        icon={IdCard}
+                                        placeholder="Take or choose a photo"
+                                        required={requiresLicensePhoto}
+                                    />
                                 </FormField>
                             </div>
 
@@ -260,15 +261,7 @@ export function BookingRequestDialog({
                                 <legend className="mb-2 text-sm font-medium">
                                     How will you pay?
                                 </legend>
-                                <input
-                                    type="hidden"
-                                    name="payment_method"
-                                    value={paymentMethod}
-                                />
-                                <div
-                                    role="radiogroup"
-                                    className="grid gap-2 sm:grid-cols-2"
-                                >
+                                <div className="grid gap-2 sm:grid-cols-2">
                                     {paymentMethods.map((method) => {
                                         const isChosen =
                                             method.value === paymentMethod;
@@ -278,23 +271,27 @@ export function BookingRequestDialog({
                                                 : Banknote;
 
                                         return (
-                                            <button
+                                            <label
                                                 key={method.value}
-                                                type="button"
-                                                role="radio"
-                                                aria-checked={isChosen}
-                                                onClick={() =>
-                                                    setPaymentMethod(
-                                                        method.value,
-                                                    )
-                                                }
                                                 className={cn(
-                                                    'flex items-start gap-3 rounded-2xl border p-3 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-brand',
+                                                    'flex cursor-pointer items-start gap-3 rounded-2xl border p-3 text-left transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand',
                                                     isChosen
                                                         ? 'border-brand bg-brand/5'
                                                         : 'hover:border-foreground/30',
                                                 )}
                                             >
+                                                <input
+                                                    type="radio"
+                                                    name="payment_method"
+                                                    value={method.value}
+                                                    checked={isChosen}
+                                                    onChange={() =>
+                                                        setPaymentMethod(
+                                                            method.value,
+                                                        )
+                                                    }
+                                                    className="sr-only"
+                                                />
                                                 <Icon className="mt-0.5 size-4 shrink-0 text-brand" />
                                                 <span>
                                                     <span className="block text-sm font-medium">
@@ -307,7 +304,7 @@ export function BookingRequestDialog({
                                                             : 'Pay the owner when you collect the car.'}
                                                     </span>
                                                 </span>
-                                            </button>
+                                            </label>
                                         );
                                     })}
                                 </div>
@@ -334,6 +331,29 @@ export function BookingRequestDialog({
                                 </div>
                             )}
 
+                            {hasDamageTerms && (
+                                <div className="rounded-2xl border bg-muted/30 p-4">
+                                    <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+                                        If the car is damaged
+                                    </p>
+                                    {(damageFee ?? 0) > 0 && (
+                                        <p className="mt-1.5 text-sm">
+                                            You pay the first{' '}
+                                            <strong className="font-semibold">
+                                                {formatPeso(damageFee ?? 0)}
+                                            </strong>{' '}
+                                            of any damage during your rental,
+                                            like an insurance participation fee.
+                                        </p>
+                                    )}
+                                    {damagePolicy && (
+                                        <p className="mt-1.5 max-h-32 overflow-y-auto text-sm whitespace-pre-line">
+                                            {damagePolicy}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
                             <div className="space-y-1">
                                 <div className="flex items-start gap-2">
                                     <Checkbox
@@ -348,8 +368,8 @@ export function BookingRequestDialog({
                                         I am at least 21, hold a valid driver's
                                         license, and agree to pay the owner the
                                         total shown above
-                                        {policy
-                                            ? ' and to their payment & cancellation policy.'
+                                        {agreedPolicies.length > 0
+                                            ? ` and to their ${agreedPolicies.join(' and ')}.`
                                             : '.'}
                                         {storefront && (
                                             <>

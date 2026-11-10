@@ -114,8 +114,13 @@ export function DateRangePicker({
     onOpenChange,
     rules,
 }: {
-    /** The owner's booking rules: first and last bookable day, shortest rental. */
-    rules?: { earliest?: Date; latest?: Date; minDays?: number };
+    /** The owner's booking rules: first and last bookable day, shortest and longest rental. */
+    rules?: {
+        earliest?: Date;
+        latest?: Date;
+        minDays?: number;
+        maxDays?: number;
+    };
     value: DateRange | undefined;
     onChange: (range: DateRange | undefined) => void;
     bookedRanges?: BookedRange[];
@@ -209,6 +214,16 @@ export function DateRangePicker({
                                       draft.from,
                                       bookedRanges,
                                   ),
+                                  ...(rules?.maxDays
+                                      ? [
+                                            {
+                                                after: addDays(
+                                                    draft.from,
+                                                    rules.maxDays,
+                                                ),
+                                            },
+                                        ]
+                                      : []),
                                   ...((rules?.minDays ?? 1) > 1
                                       ? [
                                             {

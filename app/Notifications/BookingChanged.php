@@ -13,6 +13,9 @@ class BookingChanged extends Notification implements ShouldQueue
 {
     use Queueable;
 
+    /** Skip quietly if the booking, car or invoice was deleted before it sent. */
+    public bool $deleteWhenMissingModels = true;
+
     /**
      * @param  string  $before  The car and dates before the change.
      */
@@ -28,8 +31,8 @@ class BookingChanged extends Notification implements ShouldQueue
      */
     public function via(object $notifiable): array
     {
-        // Booking emails are a plan feature.
-        return $this->booking->car->owner->planIncludes('email') ? ['mail'] : [];
+        // The renter needs this to act on their booking, so it goes out on every plan.
+        return ['mail'];
     }
 
     /**

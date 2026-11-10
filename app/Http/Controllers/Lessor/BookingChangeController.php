@@ -90,7 +90,7 @@ class BookingChangeController extends Controller
             default => null,
         };
 
-        if ($message) {
+        if (is_string($message)) {
             throw ValidationException::withMessages(['ignore_rules' => __(':rule Tick "Allow anyway" to save it.', ['rule' => $message])]);
         }
     }

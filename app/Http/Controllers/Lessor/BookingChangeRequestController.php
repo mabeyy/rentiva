@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Lessor;
 
 use App\Actions\Bookings\ChangeBooking;
+use App\Enums\BookingStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
 use App\Notifications\ChangeRequestAnswered;
@@ -11,6 +12,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class BookingChangeRequestController extends Controller
@@ -24,6 +26,12 @@ class BookingChangeRequestController extends Controller
         Gate::authorize('update', $booking);
         $request = $booking->change_request;
         abort_if($request === null, 404);
+
+        if (! in_array($booking->status, [BookingStatus::Pending, BookingStatus::Confirmed], true) || CarbonImmutable::parse($request['start_date'])->isBefore(today())) {
+            $booking->update(['change_request' => null]);
+
+            throw ValidationException::withMessages(['change_request' => __('This request can\'t be approved any more: the booking has ended or the new dates have passed.')]);
+        }
 
         $changeBooking->handle(
             $booking,

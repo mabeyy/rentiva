@@ -1,4 +1,4 @@
-import { Head } from '@inertiajs/react';
+import { Head, usePage } from '@inertiajs/react';
 import { Download, Inbox } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BookingStatusActions } from '@/components/bookings/booking-status-actions';
@@ -23,15 +23,20 @@ export default function LessorBookingsIndex({
 }) {
     const { apply } = useQueryFilters(lessor.bookings.index(), { status });
 
+    const { workspace } = usePage<{
+        workspace?: { permissions: string[] } | null;
+    }>().props;
+    // The export includes money, so it's for the owner and payments staff.
+    const canExport = !workspace || workspace.permissions.includes('payments');
+
     return (
         <>
             <Head title="Bookings" />
 
-            <div className="space-y-6 p-4 md:p-8">
+            <div className="mx-auto w-full max-w-7xl space-y-6 p-4 md:p-8">
                 <PageHeader
-                    eyebrow="Requests and trips"
                     title="Bookings"
-                    description="Confirm requests quickly. Renters pay you at pickup."
+                    description="Confirm requests quickly: ones you don't answer within 48 hours expire."
                     actions={<BookingsViewTabs active="list" />}
                 />
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -40,17 +45,23 @@ export default function LessorBookingsIndex({
                         value={status}
                         onChange={(value) => apply({ status: value })}
                     />
-                    <Button variant="outline" className="rounded-full" asChild>
-                        <a
-                            href={
-                                lessor.bookings.export({
-                                    query: status ? { status } : {},
-                                }).url
-                            }
+                    {canExport && (
+                        <Button
+                            variant="outline"
+                            className="rounded-full"
+                            asChild
                         >
-                            <Download /> Export CSV
-                        </a>
-                    </Button>
+                            <a
+                                href={
+                                    lessor.bookings.export({
+                                        query: status ? { status } : {},
+                                    }).url
+                                }
+                            >
+                                <Download /> Export CSV
+                            </a>
+                        </Button>
+                    )}
                 </div>
 
                 {bookings.data.length > 0 ? (

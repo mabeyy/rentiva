@@ -16,6 +16,9 @@ class ChangeRequestAnswered extends Notification implements ShouldQueue
 {
     use Queueable;
 
+    /** Skip quietly if the booking, car or invoice was deleted before it sent. */
+    public bool $deleteWhenMissingModels = true;
+
     public function __construct(public Booking $booking, public string $reason) {}
 
     /**
@@ -25,8 +28,8 @@ class ChangeRequestAnswered extends Notification implements ShouldQueue
      */
     public function via(object $notifiable): array
     {
-        // Booking emails are a plan feature.
-        return $this->booking->car->owner->planIncludes('email') ? ['mail'] : [];
+        // The renter needs this to act on their booking, so it goes out on every plan.
+        return ['mail'];
     }
 
     public function toMail(object $notifiable): MailMessage

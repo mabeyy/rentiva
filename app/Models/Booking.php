@@ -67,6 +67,8 @@ use Illuminate\Support\Str;
  * @property Carbon|null $payment_due_at When an unpaid bank transfer booking is released.
  * @property string|null $payment_reference Bank reference the renter typed back.
  * @property string|null $payment_proof_path Transfer screenshot on the private disk.
+ * @property int|null $amount_paid Centavos the renter paid, recorded when the payment was confirmed.
+ * @property string|null $cancel_reason Why it was cancelled, shown to the renter.
  * @property string|null $payment_rejection_reason
  * @property Carbon|null $payment_submitted_at
  * @property Carbon|null $paid_at
@@ -198,7 +200,7 @@ class Booking extends Model
                 $user->id === $this->car->owner_id => 'owner',
                 default => 'admin',
             },
-            'actor_name' => $bySystem ? config('app.name') : ($impersonator?->name ?? $staff?->name ?? $user?->name ?? $this->renter_name),
+            'actor_name' => $bySystem ? config('app.name') : ($impersonator->name ?? $staff->name ?? $user->name ?? $this->renter_name),
             'description' => $description,
         ]);
     }
@@ -220,16 +222,18 @@ class Booking extends Model
             return null;
         }
 
-        return match ($storefront->renter_cancellation) {
+        $reason = match ($storefront->renter_cancellation) {
             RenterCancellation::Anytime => null,
             RenterCancellation::Never => __('This owner doesn\'t allow cancelling online. Call or message them to change or cancel your booking.'),
             RenterCancellation::WithNotice => now()->greaterThan($this->start_date->startOfDay()->subHours($storefront->cancellation_notice_hours))
                 ? __('Online cancelling closed :hours hours before pickup. Call or message the owner to change your booking.', ['hours' => $storefront->cancellation_notice_hours])
                 : null,
         };
+
+        return is_string($reason) ? $reason : null;
     }
 
-    /** Pickup times are set in Philippine time; the app stores UTC. */
+    /** Pickup times are set in Philippine time, which is also the app's own time zone. */
     public const string PICKUP_TIMEZONE = 'Asia/Manila';
 
     /**
@@ -238,7 +242,7 @@ class Booking extends Model
      */
     public function pickupAt(): CarbonImmutable
     {
-        $time = $this->car->owner->storefront?->pickup_time ?? '09:00';
+        $time = $this->car->owner->storefront->pickup_time ?? '09:00';
 
         return CarbonImmutable::parse("{$this->start_date->toDateString()} {$time}", self::PICKUP_TIMEZONE);
     }
@@ -249,7 +253,7 @@ class Booking extends Model
      */
     public function startTransferDeadline(): void
     {
-        $minutes = $this->car->owner->storefront?->transfer_deadline_minutes ?? 60;
+        $minutes = $this->car->owner->storefront->transfer_deadline_minutes ?? 60;
 
         $this->forceFill(['payment_due_at' => now()->addMinutes($minutes)])->save();
     }
@@ -410,24 +414,29 @@ class Booking extends Model
     }
 
     /**
-     * What's left to pay at pickup.
+     * What's left to pay at pickup: the total less what was already paid, so
+     * a charge or longer dates added after paying still shows as owed.
      */
     public function balanceDue(): int
     {
-        return match (true) {
-            $this->payment_status === PaymentStatus::Paid && $this->down_payment > 0 => max(0, $this->total - $this->down_payment),
-            $this->payment_status === PaymentStatus::Paid => 0,
-            default => $this->total,
-        };
+        return max(0, $this->total - $this->amountPaid());
     }
 
     /**
-     * What the renter has paid by transfer: the down payment or the total once
-     * the owner confirmed it, otherwise nothing.
+     * What the renter has paid, as recorded when the payment was confirmed.
+     * It stays put when the total changes later.
      */
     public function amountPaid(): int
     {
-        return $this->payment_status === PaymentStatus::Paid ? $this->transferAmount() : 0;
+        return $this->payment_status === PaymentStatus::Paid ? ($this->amount_paid ?? $this->transferAmount()) : 0;
+    }
+
+    /**
+     * How much the renter paid over the total, e.g. after shorter dates.
+     */
+    public function overpaid(): int
+    {
+        return max(0, $this->amountPaid() - $this->total);
     }
 
     /**

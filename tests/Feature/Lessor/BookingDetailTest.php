@@ -3,6 +3,7 @@
 use App\Models\Booking;
 use App\Models\Car;
 use App\Models\RenterFlag;
+use App\Models\Storefront;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -63,4 +64,18 @@ test('the receipt and agreement show the booking\'s details', function () {
         ->assertSee('Rental agreement')
         ->assertSee($booking->renter_name)
         ->assertSee('₱3,000.00');
+});
+
+test('the agreement prints the owner\'s damage terms', function () {
+    $booking = Booking::factory()->create();
+    $storefront = Storefront::factory()->for($booking->car->owner, 'owner')->create([
+        'damage_participation_fee' => 500000,
+        'damage_policy' => 'Renter also pays for days the car is in the shop.',
+    ]);
+    $this->actingAs($booking->car->owner);
+
+    $this->get(route('lessor.bookings.agreement', $booking))
+        ->assertOk()
+        ->assertSee('the renter pays the first ₱5,000.00 of the damage', false)
+        ->assertSee($storefront->damage_policy);
 });

@@ -33,7 +33,7 @@ trait ProvidesBlockOptions
                 ->map(fn ($bookings) => $bookings->map(fn (Booking $booking): array => [
                     'start_date' => $booking->start_date->toDateString(),
                     'end_date' => $booking->end_date->toDateString(),
-                ])->values())
+                ])->values()->all())
                 ->all(),
             'blocks' => CarBlockResource::collection(
                 CarBlock::query()->whereIn('car_id', $cars->modelKeys())->upcoming()->with('car')->get(),

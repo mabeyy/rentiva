@@ -62,7 +62,7 @@ describe('peak seasons', function () {
 describe('booking limits', function () {
     beforeEach(function () {
         Notification::fake();
-        $this->storefront = Storefront::factory()->create(['min_rental_days' => 3, 'advance_notice_hours' => 48, 'max_advance_days' => 60, 'pickup_time' => '09:00']);
+        $this->storefront = Storefront::factory()->onPlan()->create(['min_rental_days' => 3, 'advance_notice_hours' => 48, 'max_advance_days' => 60, 'pickup_time' => '09:00']);
         $this->car = Car::factory()->for($this->storefront->owner, 'owner')->create();
     });
 

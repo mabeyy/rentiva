@@ -2,6 +2,7 @@
 
 namespace App\Actions\Bookings;
 
+use App\Actions\Images\StoreOptimizedImage;
 use App\Enums\BookingStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
@@ -19,7 +20,10 @@ use Illuminate\Validation\ValidationException;
 
 class CreateBooking
 {
-    public function __construct(private readonly PriceBooking $priceBooking) {}
+    public function __construct(
+        private readonly PriceBooking $priceBooking,
+        private readonly StoreOptimizedImage $storeOptimizedImage,
+    ) {}
 
     /**
      * Reserve a car and notify whoever needs to know. A renter's request waits
@@ -46,7 +50,7 @@ class CreateBooking
                 throw ValidationException::withMessages(['start_date' => __('This car is no longer available for booking.')]);
             }
 
-            if (! $addedByOwner && $car->owner->isBillingPaused()) {
+            if (! $addedByOwner && ! $car->owner->isTakingOnlineBookings()) {
                 throw ValidationException::withMessages(['start_date' => __('This business isn\'t taking online bookings right now. Please contact them directly.')]);
             }
 
@@ -66,18 +70,17 @@ class CreateBooking
                 ...($addedByOwner ? ['status' => BookingStatus::Confirmed, 'confirmed_at' => now()] : ['source' => 'online']),
             ]);
 
-            if ($addedByOwner && $isPaid) {
-                $booking->forceFill(['payment_status' => PaymentStatus::Paid, 'paid_at' => now()]);
-            }
-
             $storefront = $car->owner->storefront;
 
-            if ($booking->payment_method === PaymentMethod::BankTransfer && $storefront?->down_payment_enabled && $car->owner->planIncludes('down_payments')) {
+            if ($addedByOwner && $isPaid) {
+                // The owner already has the money: all of it, so no down payment applies.
+                $booking->forceFill(['payment_status' => PaymentStatus::Paid, 'paid_at' => now(), 'amount_paid' => $booking->total]);
+            } elseif ($booking->payment_method === PaymentMethod::BankTransfer && $storefront?->down_payment_enabled && $car->owner->planIncludes('down_payments')) {
                 $booking->down_payment = self::downPayment($booking->total, $storefront->down_payment_percent);
             }
 
             if ($licensePhoto) {
-                $booking->forceFill(['license_photo_path' => $licensePhoto->store('license-photos', 'local')]);
+                $booking->forceFill(['license_photo_path' => $this->storeOptimizedImage->handle($licensePhoto, 'license-photos', 'local', StoreOptimizedImage::DOCUMENT, 85)]);
             }
 
             $booking->save();

@@ -13,6 +13,9 @@ class BookingRequested extends Notification implements ShouldQueue
 {
     use Queueable;
 
+    /** Skip quietly if the booking, car or invoice was deleted before it sent. */
+    public bool $deleteWhenMissingModels = true;
+
     /**
      * Create a new notification instance.
      */
@@ -48,6 +51,7 @@ class BookingRequested extends Notification implements ShouldQueue
             ->line($this->booking->down_payment > 0
                 ? __('Total :total: a :down down payment by bank transfer once confirmed, the rest at pickup.', ['total' => $this->booking->formattedTotal(), 'down' => $this->booking->formattedTransferAmount()])
                 : __('Total: :total (:method).', ['total' => $this->booking->formattedTotal(), 'method' => $this->booking->payment_method->label()]))
+            ->line(__('Please answer within 48 hours. After that, or once the pickup time passes, the request expires and the dates open up again.'))
             ->action(__('Review request'), route('lessor.bookings.index'));
     }
 }

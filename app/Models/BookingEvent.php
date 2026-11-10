@@ -29,10 +29,13 @@ class BookingEvent extends Model
     public const UPDATED_AT = null;
 
     /** Every action the log records, in the order a booking usually goes. */
+    /** Events about money, shown only to people who handle payments. */
+    public const array MONEY_ACTIONS = ['payment_submitted', 'payment_approved', 'payment_rejected', 'refunded', 'charged', 'deposit_collected', 'deposit_returned'];
+
     public const array ACTIONS = [
         'requested', 'added', 'confirmed', 'declined', 'cancelled', 'completed',
         'payment_submitted', 'payment_approved', 'payment_rejected', 'reviewed', 'license_checked', 'replied',
-        'changed', 'change_requested', 'change_declined', 'refunded', 'charged', 'deposit_collected', 'deposit_returned', 'pickup_checked', 'return_checked',
+        'changed', 'change_requested', 'change_withdrawn', 'change_declined', 'refunded', 'charged', 'deposit_collected', 'deposit_returned', 'pickup_checked', 'return_checked',
         'blocked', 'block_changed', 'unblocked',
     ];
 
@@ -93,6 +96,6 @@ class BookingEvent extends Model
      */
     public function subjectCar(): ?Car
     {
-        return $this->booking?->car ?? $this->car;
+        return $this->booking->car ?? $this->car;
     }
 }

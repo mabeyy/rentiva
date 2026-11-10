@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Storage;
 
 beforeEach(function () {
     $this->storefront = Storefront::factory()->onPlan()->create();
-    $this->car = Car::factory()->for($this->storefront->owner, 'owner')->create(['daily_rate' => 200000, 'security_deposit' => 500000]);
+    $this->car = Car::factory()->for($this->storefront->owner, 'owner')->create(['daily_rate' => 200000, 'deposit_percent' => 100]);
     $this->booking = Booking::factory()->for($this->car)->confirmed()
         ->between(today()->addDays(3)->toDateString(), today()->addDays(5)->toDateString())
         ->create(['daily_rate' => 200000, 'subtotal' => 400000, 'total' => 400000, 'security_deposit' => 500000]);

@@ -1,4 +1,4 @@
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { format, parseISO } from 'date-fns';
 import {
     AlertTriangle,
@@ -20,6 +20,7 @@ import type { ChangeableCar } from '@/components/bookings/booking-change-dialog'
 import { BookingChangeDialog } from '@/components/bookings/booking-change-dialog';
 import { BookingChargesCard } from '@/components/bookings/booking-charges-card';
 import { BookingDepositCard } from '@/components/bookings/booking-deposit-card';
+import { InfoTip } from '@/components/info-tip';
 import { BookingInspectionsCard } from '@/components/bookings/booking-inspections-card';
 import {
     BookingRefundCard,
@@ -28,7 +29,6 @@ import {
 import { BookingPaymentReview } from '@/components/bookings/booking-payment-review';
 import { BookingStatusActions } from '@/components/bookings/booking-status-actions';
 import { BookingSummary } from '@/components/bookings/booking-summary';
-import { RenterNoticeCard } from '@/components/bookings/renter-notice-card';
 import { ReviewReplyForm } from '@/components/bookings/review-reply-form';
 import { Stars } from '@/components/bookings/trip-review';
 import { StatusBadge } from '@/components/status-badge';
@@ -41,6 +41,7 @@ import type { ActivityEvent } from '@/pages/lessor/activity';
 import { actionMeta } from '@/pages/lessor/activity';
 import lessor from '@/routes/lessor';
 import type { Booking } from '@/types';
+import { ImageLightbox } from '@/components/image-lightbox';
 
 type BookingReview = {
     id: number;
@@ -58,11 +59,14 @@ type RenterSummary = {
 
 function Card({
     title,
+    info,
     action,
     children,
     className,
 }: {
     title: string;
+    /** A short explanation shown from an "i" beside the title. */
+    info?: string;
     action?: ReactNode;
     children: ReactNode;
     className?: string;
@@ -72,8 +76,9 @@ function Card({
             className={cn('rounded-3xl border bg-background p-5', className)}
         >
             <div className="mb-4 flex items-center justify-between gap-2">
-                <h2 className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+                <h2 className="flex items-center gap-1 text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
                     {title}
+                    {info && <InfoTip>{info}</InfoTip>}
                 </h2>
                 {action}
             </div>
@@ -105,12 +110,7 @@ export default function LessorBookingShow({
     cars,
     chargeLabels,
     seasons,
-    businessName,
-    emailsRenter,
 }: {
-    businessName: string;
-    /** False on plans without booking emails: the owner tells the renter. */
-    emailsRenter: boolean;
     seasons: Season[];
     booking: Booking;
     events: ActivityEvent[];
@@ -119,6 +119,12 @@ export default function LessorBookingShow({
     cars: ChangeableCar[];
     chargeLabels: string[];
 }) {
+    const { workspace } = usePage<{
+        workspace?: { permissions: string[] } | null;
+    }>().props;
+    // Refunds, charges and deposits are for the owner and payments staff.
+    const canHandleMoney =
+        !workspace || workspace.permissions.includes('payments');
     const car = booking.car;
     const canAct = booking.next_statuses.length > 0;
     const isActive = ['pending', 'confirmed'].includes(booking.status.value);
@@ -130,7 +136,7 @@ export default function LessorBookingShow({
         <>
             <Head title={`${booking.reference} · ${booking.renter_name}`} />
 
-            <div className="mx-auto w-full max-w-6xl space-y-6 p-4 md:p-8">
+            <div className="mx-auto w-full max-w-7xl space-y-6 p-4 md:p-8">
                 <Link
                     href={lessor.bookings.index()}
                     className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
@@ -336,6 +342,11 @@ export default function LessorBookingShow({
                                     {booking.down_payment > 0 && (
                                         <p className="text-muted-foreground">
                                             Down payment{' '}
+                                            <InfoTip>
+                                                The part the renter pays by bank
+                                                transfer after you confirm. The
+                                                rest is paid at pickup.
+                                            </InfoTip>{' '}
                                             <span className="font-medium text-foreground tabular-nums">
                                                 {formatPeso(
                                                     booking.down_payment,
@@ -347,6 +358,12 @@ export default function LessorBookingShow({
                                         booking.balance_due < booking.total && (
                                             <p className="text-muted-foreground">
                                                 Balance at pickup{' '}
+                                                <InfoTip>
+                                                    What's left to collect when
+                                                    the renter picks up the car,
+                                                    after what they already
+                                                    paid.
+                                                </InfoTip>{' '}
                                                 <span className="font-medium text-foreground tabular-nums">
                                                     {formatPeso(
                                                         booking.balance_due,
@@ -354,6 +371,14 @@ export default function LessorBookingShow({
                                                 </span>
                                             </p>
                                         )}
+                                    {booking.overpaid > 0 && (
+                                        <p className="font-medium text-amber-700 dark:text-amber-400">
+                                            The renter paid{' '}
+                                            {formatPeso(booking.overpaid)} more
+                                            than the new total. Refund the
+                                            difference.
+                                        </p>
+                                    )}
                                     {booking.paid_at && (
                                         <p className="text-muted-foreground">
                                             Paid{' '}
@@ -392,13 +417,6 @@ export default function LessorBookingShow({
                     </div>
 
                     <div className="space-y-6">
-                        {!emailsRenter && (
-                            <RenterNoticeCard
-                                booking={booking}
-                                businessName={businessName}
-                            />
-                        )}
-
                         <Card
                             title="Renter"
                             action={
@@ -444,15 +462,15 @@ export default function LessorBookingShow({
 
                             <div className="mt-4 border-t border-dashed pt-4">
                                 {booking.has_license_photo ? (
-                                    <a
-                                        href={
+                                    <ImageLightbox
+                                        src={
                                             lessor.bookings.license.show(
                                                 booking.reference,
                                             ).url
                                         }
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="block overflow-hidden rounded-2xl border"
+                                        alt={`${booking.renter_name}'s driver's license`}
+                                        label="Enlarge license photo"
+                                        className="block w-full overflow-hidden rounded-2xl border"
                                     >
                                         <img
                                             src={
@@ -463,7 +481,7 @@ export default function LessorBookingShow({
                                             alt={`${booking.renter_name}'s driver's license`}
                                             className="aspect-[3/2] w-full object-cover"
                                         />
-                                    </a>
+                                    </ImageLightbox>
                                 ) : (
                                     <p className="text-sm text-muted-foreground">
                                         No license photo uploaded.
@@ -512,7 +530,8 @@ export default function LessorBookingShow({
                             </div>
                         </Card>
 
-                        {booking.amount_paid > 0 &&
+                        {canHandleMoney &&
+                            booking.amount_paid > 0 &&
                             ['cancelled', 'declined'].includes(
                                 booking.status.value,
                             ) && (
@@ -521,7 +540,7 @@ export default function LessorBookingShow({
                                 </Card>
                             )}
 
-                        {isUnderway && (
+                        {canHandleMoney && isUnderway && (
                             <Card title="Extra charges">
                                 <BookingChargesCard
                                     booking={booking}
@@ -530,11 +549,16 @@ export default function LessorBookingShow({
                             </Card>
                         )}
 
-                        {isUnderway && booking.security_deposit > 0 && (
-                            <Card title="Security deposit">
-                                <BookingDepositCard booking={booking} />
-                            </Card>
-                        )}
+                        {canHandleMoney &&
+                            isUnderway &&
+                            booking.security_deposit > 0 && (
+                                <Card
+                                    title="Security deposit"
+                                    info="Money you hold at pickup in case of damage or late return. It's not part of the rental total; record what you give back when the car returns."
+                                >
+                                    <BookingDepositCard booking={booking} />
+                                </Card>
+                            )}
 
                         <Card title="History">
                             <ol className="relative space-y-4 border-l pl-5">

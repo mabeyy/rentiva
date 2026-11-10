@@ -120,7 +120,8 @@ describe('show', function () {
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->where('booking.reference', $booking->reference)
-                ->where('host', null)
+                // Even before confirming, the renter can reach the owner.
+                ->where('host.phone', $booking->car->owner->phone)
                 ->whereNot('cancelUrl', null));
     });
 
@@ -173,7 +174,7 @@ describe('destroy', function () {
         $booking = Booking::factory()->completed()->create();
 
         $this->delete(URL::signedRoute('bookings.destroy', $booking))
-            ->assertSessionHasErrors(['status' => 'A completed booking cannot be marked as cancelled.']);
+            ->assertRedirect($booking->manageUrl());
 
         expect($booking->fresh()->status)->toBe(BookingStatus::Completed);
     });

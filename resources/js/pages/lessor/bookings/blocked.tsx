@@ -44,9 +44,8 @@ export default function LessorBookingsBlocked({
         <>
             <Head title="Blocked dates" />
 
-            <div className="space-y-6 p-4 md:p-8">
+            <div className="mx-auto w-full max-w-7xl space-y-6 p-4 md:p-8">
                 <PageHeader
-                    eyebrow="Requests and trips"
                     title="Bookings"
                     description="Days renters can't book a car, like maintenance. The car stays on your booking page."
                     actions={<BookingsViewTabs active="blocked" />}
@@ -128,7 +127,7 @@ export default function LessorBookingsBlocked({
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                aria-label="Edit blocked dates"
+                                                tooltip="Edit blocked dates"
                                                 onClick={() =>
                                                     setEditing(block)
                                                 }
@@ -140,7 +139,7 @@ export default function LessorBookingsBlocked({
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
-                                                        aria-label="Remove blocked dates"
+                                                        tooltip="Open these dates again"
                                                     >
                                                         <Trash2 />
                                                     </Button>

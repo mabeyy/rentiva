@@ -17,12 +17,14 @@ import {
     ChevronLeft,
     ChevronDown,
     ChevronRight,
+    CircleDot,
     Phone,
     Plus,
     Route,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
+import { Hint, InfoTip } from '@/components/info-tip';
 import { BookingPaymentReview } from '@/components/bookings/booking-payment-review';
 import { BookingStatusActions } from '@/components/bookings/booking-status-actions';
 import type { BlockOptions } from '@/components/bookings/block-dates-dialog';
@@ -269,6 +271,7 @@ function BookingRow({ booking }: { booking: Booking }) {
                         size="icon"
                         variant="ghost"
                         className="size-8 rounded-full"
+                        tooltip={`Call ${booking.renter_phone}`}
                     >
                         <a
                             href={`tel:${booking.renter_phone}`}
@@ -293,10 +296,12 @@ function BookingRow({ booking }: { booking: Booking }) {
 function DaySection({
     icon: Icon,
     title,
+    info,
     bookings,
 }: {
     icon: LucideIcon;
     title: string;
+    info: string;
     bookings: Booking[];
 }) {
     if (bookings.length === 0) {
@@ -309,6 +314,7 @@ function DaySection({
                 <Icon className="size-3.5 text-brand" />
                 {title}
                 <span className="tabular-nums">· {bookings.length}</span>
+                <InfoTip>{info}</InfoTip>
             </h3>
             <ul className="space-y-2">
                 {bookings.map((booking) => (
@@ -319,10 +325,74 @@ function DaySection({
     );
 }
 
+/** Shade a day when every car is out or blocked, so full days stand out. */
+function fullTint(isFull: boolean): string {
+    return isFull
+        ? 'bg-[color-mix(in_srgb,var(--brand)_12%,var(--background))]'
+        : 'bg-background';
+}
+
+/** A small icon and number at the foot of a day, hidden when zero. */
+function DayCount({
+    icon: Icon,
+    count,
+    label,
+    className,
+    isSelected,
+}: {
+    icon: LucideIcon;
+    count: number;
+    label: string;
+    className: string;
+    isSelected: boolean;
+}) {
+    if (count <= 0) {
+        return null;
+    }
+
+    return (
+        <Hint text={`${count} ${label}`}>
+            <span
+                className={cn(
+                    'flex items-center gap-0.5 rounded-full px-1 py-0.5',
+                    isSelected
+                        ? 'bg-white/10 text-ink-foreground/90'
+                        : className,
+                )}
+            >
+                <Icon className="size-3" />
+                {count}
+            </span>
+        </Hint>
+    );
+}
+
+/** One entry in the calendar's key: a swatch and what it means. */
+function LegendItem({
+    label,
+    info,
+    children,
+}: {
+    label: string;
+    info?: string;
+    children: ReactNode;
+}) {
+    return (
+        <span className="flex items-center gap-2">
+            <span aria-hidden className="flex w-5 justify-center">
+                {children}
+            </span>
+            {label}
+            {info && <InfoTip className="-ml-1">{info}</InfoTip>}
+        </span>
+    );
+}
+
 export default function LessorBookingsCalendar({
     bookings,
     blocks,
     blockOptions,
+    fleetSize,
     selectedDate,
     today,
 }: {
@@ -331,6 +401,8 @@ export default function LessorBookingsCalendar({
     /** Days the owner took cars off the calendar, overlapping the grid. */
     blocks: CarBlock[];
     blockOptions: BlockOptions;
+    /** Live cars, to show how much of the fleet each day takes. */
+    fleetSize: number;
     selectedDate: string;
     today: string;
 }) {
@@ -430,9 +502,8 @@ export default function LessorBookingsCalendar({
             {/* On large screens the page fits one screen: the calendar's
                 rows shrink to fit and the day panel scrolls inside. The
                 height leaves room for the top bar and the inset margin. */}
-            <div className="space-y-8 p-4 md:p-8 lg:flex lg:h-[calc(100svh-5rem)] lg:flex-col lg:space-y-6">
+            <div className="mx-auto w-full max-w-7xl space-y-8 p-4 md:p-8 lg:flex lg:h-[calc(100svh-5rem)] lg:flex-col lg:space-y-6">
                 <PageHeader
-                    eyebrow="Requests and trips"
                     title="Bookings"
                     description="Pick a day to see who's picking up, returning or out on the road."
                     actions={<BookingsViewTabs active="calendar" />}
@@ -444,7 +515,7 @@ export default function LessorBookingsCalendar({
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                aria-label="Previous month"
+                                tooltip="Previous month"
                                 onClick={() =>
                                     visit(toIsoDate(addMonths(month, -1)))
                                 }
@@ -468,7 +539,7 @@ export default function LessorBookingsCalendar({
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                aria-label="Next month"
+                                tooltip="Next month"
                                 onClick={() =>
                                     visit(toIsoDate(addMonths(month, 1)))
                                 }
@@ -499,6 +570,10 @@ export default function LessorBookingsCalendar({
                                     activity.pendingCount;
                                 const isSelected = date === selected;
                                 const isToday = date === today;
+                                const isPast = date < today;
+                                const isFull =
+                                    fleetSize > 0 &&
+                                    carsOut + blockedCount >= fleetSize;
                                 const inMonth = isSameMonth(
                                     parseISO(date),
                                     month,
@@ -516,95 +591,137 @@ export default function LessorBookingsCalendar({
                                             'flex min-h-16 flex-col items-start gap-1 overflow-hidden p-1.5 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-inset sm:min-h-20 sm:p-2 lg:min-h-0',
                                             isSelected
                                                 ? 'bg-ink text-ink-foreground'
-                                                : 'bg-background hover:bg-muted/60',
+                                                : cn(
+                                                      'hover:bg-muted/60',
+                                                      fullTint(isFull),
+                                                  ),
                                             !inMonth &&
                                                 !isSelected &&
                                                 'bg-muted/30 text-muted-foreground/60',
                                         )}
                                     >
-                                        <span
-                                            className={cn(
-                                                'flex size-6 items-center justify-center rounded-full text-xs font-semibold tabular-nums',
-                                                isToday &&
-                                                    !isSelected &&
-                                                    'bg-brand text-brand-foreground',
+                                        <span className="flex w-full items-center justify-between gap-1">
+                                            <span
+                                                className={cn(
+                                                    'flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold tabular-nums',
+                                                    isToday &&
+                                                        !isSelected &&
+                                                        'bg-brand text-brand-foreground',
+                                                    isPast &&
+                                                        !isToday &&
+                                                        !isSelected &&
+                                                        'text-muted-foreground',
+                                                )}
+                                            >
+                                                {format(parseISO(date), 'd')}
+                                            </span>
+                                            {carsOut > 0 && (
+                                                <Hint
+                                                    text={
+                                                        isFull
+                                                            ? 'Every car is out or blocked. Renters can’t book this day.'
+                                                            : `${carsOut} of your ${fleetSize} ${fleetSize === 1 ? 'car is' : 'cars are'} out`
+                                                    }
+                                                >
+                                                    <span
+                                                        className={cn(
+                                                            'flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] leading-none font-semibold tabular-nums',
+                                                            isSelected
+                                                                ? 'bg-white/15'
+                                                                : isFull
+                                                                  ? 'bg-brand text-brand-foreground'
+                                                                  : 'bg-background/80 text-brand ring-1 ring-brand/20',
+                                                        )}
+                                                    >
+                                                        <CarFront className="size-3" />
+                                                        {isFull
+                                                            ? 'Full'
+                                                            : fleetSize > 0
+                                                              ? `${carsOut}/${fleetSize}`
+                                                              : carsOut}
+                                                    </span>
+                                                </Hint>
                                             )}
-                                        >
-                                            {format(parseISO(date), 'd')}
                                         </span>
-                                        {blockedCount > 0 && (
-                                            <span
-                                                className={cn(
-                                                    'rounded-full border px-1.5 text-[10px] leading-4 font-semibold whitespace-nowrap tabular-nums',
-                                                    isSelected
-                                                        ? 'border-white/20 text-ink-foreground/80'
-                                                        : cn(
-                                                              'text-muted-foreground',
-                                                              blockedStripes,
-                                                          ),
-                                                )}
-                                            >
-                                                {blockedCount} blocked
-                                            </span>
-                                        )}
-                                        {carsOut > 0 && (
-                                            <span
-                                                className={cn(
-                                                    'rounded-full px-1.5 text-[10px] leading-4 font-semibold whitespace-nowrap tabular-nums',
-                                                    isSelected
-                                                        ? 'bg-white/15'
-                                                        : 'bg-brand/10 text-brand',
-                                                )}
-                                            >
-                                                {carsOut} out
-                                            </span>
-                                        )}
-                                        <span className="mt-auto flex gap-1">
-                                            {activity.pickups.length > 0 && (
-                                                <span className="size-1.5 rounded-full bg-emerald-500" />
-                                            )}
-                                            {activity.returns.length > 0 && (
-                                                <span className="size-1.5 rounded-full bg-sky-500" />
-                                            )}
-                                            {activity.pendingCount > 0 && (
-                                                <span className="size-1.5 rounded-full bg-amber-500" />
-                                            )}
+                                        <span className="mt-auto flex flex-wrap gap-1 text-[11px] leading-none font-semibold tabular-nums">
+                                            <DayCount
+                                                icon={ArrowUpFromLine}
+                                                count={
+                                                    activity.pickups.length -
+                                                    activity.pendingCount
+                                                }
+                                                label="pickups"
+                                                className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                                                isSelected={isSelected}
+                                            />
+                                            <DayCount
+                                                icon={ArrowDownToLine}
+                                                count={activity.returns.length}
+                                                label="returns"
+                                                className="bg-sky-500/10 text-sky-700 dark:text-sky-400"
+                                                isSelected={isSelected}
+                                            />
+                                            <DayCount
+                                                icon={CircleDot}
+                                                count={activity.pendingCount}
+                                                label="requests waiting"
+                                                className="bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                                                isSelected={isSelected}
+                                            />
+                                            <DayCount
+                                                icon={CalendarOff}
+                                                count={blockedCount}
+                                                label="blocked"
+                                                className="bg-muted text-muted-foreground"
+                                                isSelected={isSelected}
+                                            />
                                         </span>
                                     </button>
                                 );
                             })}
                         </div>
 
-                        <div className="mt-4 flex shrink-0 flex-wrap gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
-                            <span className="flex items-center gap-1.5">
-                                <span className="rounded-full bg-brand/10 px-1.5 text-[10px] leading-4 font-semibold text-brand">
-                                    2 out
+                        <div className="mt-4 flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
+                            <LegendItem
+                                label="Cars out"
+                                info="How many of your live cars are rented that day, like 2/5."
+                            >
+                                <span className="flex items-center rounded-full px-1 py-0.5 text-brand ring-1 ring-brand/20">
+                                    <CarFront className="size-3" />
                                 </span>
-                                Cars on rent
-                            </span>
-                            <span className="flex items-center gap-1.5">
-                                <span
-                                    className={cn(
-                                        'rounded-full border px-1.5 text-[10px] leading-4 font-semibold',
-                                        blockedStripes,
-                                    )}
-                                >
-                                    1 blocked
+                            </LegendItem>
+                            <LegendItem
+                                label="Full"
+                                info="Every live car is rented or blocked, so renters can’t book that day."
+                            >
+                                <span className="flex items-center rounded-full bg-brand px-1 py-0.5 text-brand-foreground">
+                                    <CarFront className="size-3" />
                                 </span>
-                                Not bookable
-                            </span>
-                            <span className="flex items-center gap-1.5">
-                                <span className="size-1.5 rounded-full bg-emerald-500" />
-                                Pickup
-                            </span>
-                            <span className="flex items-center gap-1.5">
-                                <span className="size-1.5 rounded-full bg-sky-500" />
-                                Return
-                            </span>
-                            <span className="flex items-center gap-1.5">
-                                <span className="size-1.5 rounded-full bg-amber-500" />
-                                Needs your answer
-                            </span>
+                            </LegendItem>
+                            <LegendItem
+                                label="Pickups"
+                                info="Confirmed bookings where the renter collects the car that day."
+                            >
+                                <ArrowUpFromLine className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                            </LegendItem>
+                            <LegendItem
+                                label="Returns"
+                                info="Confirmed bookings where the car comes back that day."
+                            >
+                                <ArrowDownToLine className="size-3.5 text-sky-600 dark:text-sky-400" />
+                            </LegendItem>
+                            <LegendItem
+                                label="Needs your answer"
+                                info="Requests waiting for you to confirm or decline, shown on their pickup day."
+                            >
+                                <CircleDot className="size-3.5 text-amber-600 dark:text-amber-400" />
+                            </LegendItem>
+                            <LegendItem
+                                label="Blocked"
+                                info="Cars you took off the calendar, for example for maintenance. Renters can’t book them on those days."
+                            >
+                                <CalendarOff className="size-3.5" />
+                            </LegendItem>
                         </div>
                     </section>
 
@@ -616,7 +733,7 @@ export default function LessorBookingsCalendar({
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    aria-label="Previous day"
+                                    tooltip="Previous day"
                                     onClick={() => shiftDay(-1)}
                                 >
                                     <ChevronLeft />
@@ -637,7 +754,7 @@ export default function LessorBookingsCalendar({
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    aria-label="Next day"
+                                    tooltip="Next day"
                                     onClick={() => shiftDay(1)}
                                 >
                                     <ChevronRight />
@@ -657,16 +774,19 @@ export default function LessorBookingsCalendar({
                                     <DaySection
                                         icon={ArrowUpFromLine}
                                         title="Picking up"
+                                        info="Renters collecting a car this day, including requests you haven't answered yet. Hand over the car and record the pickup check."
                                         bookings={day.pickups}
                                     />
                                     <DaySection
                                         icon={ArrowDownToLine}
                                         title="Returning"
+                                        info="Cars coming back this day. Check the car, return the deposit, then mark the trip completed."
                                         bookings={day.returns}
                                     />
                                     <DaySection
                                         icon={Route}
                                         title="Out on rent"
+                                        info="Cars already with a renter that aren't due back yet."
                                         bookings={day.outOnRent}
                                     />
                                     {dayBlocks.length > 0 && (
@@ -677,6 +797,11 @@ export default function LessorBookingsCalendar({
                                                 <span className="tabular-nums">
                                                     · {dayBlocks.length}
                                                 </span>
+                                                <InfoTip>
+                                                    Cars you took off the
+                                                    calendar. Renters can't book
+                                                    them on these days.
+                                                </InfoTip>
                                             </h3>
                                             <ul className="space-y-2">
                                                 {dayBlocks.map((block) => (

@@ -68,7 +68,7 @@ class SaveCarBlockRequest extends FormRequest
             }
 
             $clashesWithBlock = $car->blocks()
-                ->when($block instanceof CarBlock, fn ($query) => $query->whereKeyNot($block->id))
+                ->when($block instanceof CarBlock ? $block->id : null, fn ($query, int $blockId) => $query->whereKeyNot($blockId))
                 ->whereDate('start_date', '<=', $endDate)
                 ->whereDate('end_date', '>=', $startDate)
                 ->exists();

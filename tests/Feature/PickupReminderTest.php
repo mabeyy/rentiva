@@ -21,6 +21,7 @@ function bookingPickedUpNov10(array $storefrontAttributes = []): Booking
     $storefront = Storefront::factory()->onPlan()->create([
         'pickup_time' => '09:00',
         'semaphore_api_key' => 'sem-key',
+        'sms_sender_name' => 'ABQRENTAL',
         'sms_enabled' => true,
         ...$storefrontAttributes,
     ]);
@@ -117,7 +118,7 @@ test('pending bookings get no reminders', function () {
     Notification::assertNothingSent();
 });
 
-test('owners switch each reminder on or off from the email and SMS pages', function () {
+test('owners switch each reminder on or off from the notifications page', function () {
     $storefront = Storefront::factory()->create();
 
     $this->actingAs($storefront->owner)
@@ -126,11 +127,11 @@ test('owners switch each reminder on or off from the email and SMS pages', funct
 
     expect($storefront->fresh())->remind_sms_2h->toBeFalse()->remind_sms_24h->toBeTrue();
 
-    $this->get(route('lessor.connections.sms'))
+    $this->get(route('lessor.connections.notifications'))
         ->assertInertia(fn (Assert $page) => $page
-            ->where('settings.reminders.remind_24h', true)
-            ->where('settings.reminders.remind_2h', false)
-            ->where('settings.reminders.pickup_time', '09:00'));
+            ->where('sms.reminders.remind_24h', true)
+            ->where('sms.reminders.remind_2h', false)
+            ->where('sms.reminders.pickup_time', '09:00'));
 });
 
 test('owners set their usual pickup time on the policies page', function () {

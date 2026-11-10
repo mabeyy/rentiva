@@ -30,7 +30,7 @@ class BookingEventResource extends JsonResource
             'car_name' => $this->subjectCar()?->name,
             'owner_name' => $this->when(
                 (bool) $this->subjectCar()?->relationLoaded('owner'),
-                fn (): ?string => $this->subjectCar()->owner?->storefront?->name ?? $this->subjectCar()->owner?->name,
+                fn (): ?string => $this->subjectCar()->owner?->storefront->name ?? $this->subjectCar()->owner?->name,
             ),
         ];
     }

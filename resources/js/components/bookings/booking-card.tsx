@@ -8,14 +8,18 @@ import { BookingRequestDialog } from '@/components/bookings/booking-request-dial
 import { BookingSummary } from '@/components/bookings/booking-summary';
 import { DateRangePicker } from '@/components/date-range-picker';
 import { BrandButton } from '@/components/public/brand-button';
-import { bookingWindow, calculateBookingQuote } from '@/lib/booking-quote';
+import {
+    MAX_BOOKING_DAYS,
+    bookingWindow,
+    calculateBookingQuote,
+} from '@/lib/booking-quote';
 import { formatPeso } from '@/lib/format';
 import { defaultPaymentMethods, totalLabelFor } from '@/lib/payment';
 import type { BookedRange, Car, PaymentMethod, Storefront } from '@/types';
 
 const reassurances: { icon: LucideIcon; label: string }[] = [
     { icon: BadgeCheck, label: "You won't be charged now" },
-    { icon: Clock, label: 'The owner confirms within 24 hours' },
+    { icon: Clock, label: 'The owner answers within 48 hours' },
     { icon: Banknote, label: 'Pay the owner directly, no card needed' },
 ];
 
@@ -69,8 +73,11 @@ export function BookingCard({
     });
     const paymentMethods = storefront?.payment_methods ?? defaultPaymentMethods;
     const bookingRules = storefront
-        ? bookingWindow(storefront.booking_rules)
-        : undefined;
+        ? {
+              ...bookingWindow(storefront.booking_rules),
+              maxDays: MAX_BOOKING_DAYS,
+          }
+        : { maxDays: MAX_BOOKING_DAYS };
     const card = useRef<HTMLDivElement>(null);
     const showMobileBar =
         useIsBelowScreen(card) && storefront?.accepting_bookings !== false;

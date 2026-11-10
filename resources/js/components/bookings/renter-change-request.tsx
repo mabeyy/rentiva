@@ -1,4 +1,4 @@
-import { useForm } from '@inertiajs/react';
+import { router, useForm } from '@inertiajs/react';
 import { format, parseISO } from 'date-fns';
 import { CalendarClock, Clock, Undo2 } from 'lucide-react';
 import type { FormEvent } from 'react';
@@ -9,8 +9,28 @@ import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
+import { MAX_BOOKING_DAYS, bookingWindow } from '@/lib/booking-quote';
 import { formatPeso, toIsoDate } from '@/lib/format';
-import type { Booking } from '@/types';
+import type { BookedRange, Booking } from '@/types';
+
+/**
+ * Days the renter can pick: the owner's booking window, but the current
+ * pickup day too, so a trip under way (or starting soon) can still return
+ * later.
+ */
+function changeWindow(booking: Booking, calendar: ChangeRequestCalendar) {
+    const window = calendar ? bookingWindow(calendar.rules) : undefined;
+    const currentPickup = parseISO(booking.start_date);
+
+    return {
+        ...window,
+        earliest:
+            window && window.earliest < currentPickup
+                ? window.earliest
+                : currentPickup,
+        maxDays: MAX_BOOKING_DAYS,
+    };
+}
 
 function dates(start: string, end: string): string {
     return `${format(parseISO(start), 'MMM d')} – ${format(parseISO(end), 'MMM d, yyyy')}`;
@@ -20,12 +40,28 @@ function dates(start: string, end: string): string {
  * Lets a renter ask the owner to move their dates, and shows a pending
  * request. Nothing changes until the owner approves.
  */
+export type ChangeRequestCalendar = {
+    booked_ranges: BookedRange[];
+    rules: {
+        min_days: number;
+        notice_hours: number;
+        max_advance_days: number;
+        pickup_time: string;
+    };
+} | null;
+
 export function RenterChangeRequest({
     booking,
     changeRequestUrl,
+    calendar,
+    withdrawUrl,
 }: {
     booking: Booking;
     changeRequestUrl: string | null;
+    /** Booked days and the owner's rules, so only possible dates are offered. */
+    calendar: ChangeRequestCalendar;
+    /** Signed URL to take back a pending request. */
+    withdrawUrl: string | null;
 }) {
     const [isOpen, setIsOpen] = useState(false);
     const [range, setRange] = useState<DateRange | undefined>();
@@ -44,13 +80,26 @@ export function RenterChangeRequest({
         return (
             <section className="flex gap-3 rounded-3xl border p-5">
                 <Clock className="mt-0.5 size-5 shrink-0 text-brand" />
-                <div>
+                <div className="flex-1">
                     <p className="font-semibold">Change requested</p>
                     <p className="text-sm text-muted-foreground">
                         You asked to move to{' '}
                         {dates(pending.start_date, pending.end_date)}. The owner
                         will reply by email.
                     </p>
+                    {withdrawUrl && (
+                        <button
+                            type="button"
+                            onClick={() =>
+                                router.delete(withdrawUrl, {
+                                    preserveScroll: true,
+                                })
+                            }
+                            className="mt-2 text-sm font-medium underline-offset-4 hover:underline"
+                        >
+                            Withdraw request
+                        </button>
+                    )}
                 </div>
             </section>
         );
@@ -82,6 +131,8 @@ export function RenterChangeRequest({
                 </p>
             </div>
             <DateRangePicker
+                bookedRanges={calendar?.booked_ranges ?? []}
+                rules={changeWindow(booking, calendar)}
                 value={range}
                 onChange={(next) => {
                     setRange(next);

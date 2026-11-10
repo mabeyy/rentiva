@@ -1,6 +1,8 @@
 import { Form, router } from '@inertiajs/react';
+import { parseISO } from 'date-fns';
 import { MoreHorizontal } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from 'sonner';
 import BookingController from '@/actions/App/Http/Controllers/Lessor/BookingController';
 import { FormField } from '@/components/form-field';
 import { Button } from '@/components/ui/button';
@@ -33,11 +35,51 @@ const actionLabels: Record<BookingStatus, string> = {
 /** Moves worth their own button in compact mode; the rest go in a menu. */
 const buttonStatuses: BookingStatus[] = ['declined', 'confirmed', 'completed'];
 
+/** The moves that can't be undone, so they ask first. */
+type FinalStatus = 'declined' | 'cancelled' | 'completed';
+
+const finalMoves: Record<
+    FinalStatus,
+    {
+        title: string;
+        description: string;
+        button: string;
+        reason: 'required' | 'optional' | null;
+        placeholder?: string;
+    }
+> = {
+    declined: {
+        title: 'Decline',
+        description:
+            "The renter gets your reason by email and the dates open up again. This can't be undone.",
+        button: 'Decline booking',
+        reason: 'required',
+        placeholder: 'e.g. The car is under maintenance on those dates.',
+    },
+    cancelled: {
+        title: 'Cancel',
+        description:
+            "The renter is emailed and the dates open up again. If they paid, record their refund afterwards. This can't be undone.",
+        button: 'Cancel booking',
+        reason: 'optional',
+        placeholder:
+            'e.g. The car was in an accident. (Optional, the renter sees it.)',
+    },
+    completed: {
+        title: 'Complete',
+        description:
+            "Marks the trip as done and asks the renter for a review. This can't be undone.",
+        button: 'Mark completed',
+        reason: null,
+    },
+};
+
 /**
  * Buttons for every status a lessor may move the booking to next. Compact
  * mode keeps a request to Decline / Confirm, and puts a trip's rarer moves
  * in a "more" menu.
- * Declining asks for a reason that is emailed to the renter.
+ * Declining, cancelling and completing can't be undone, so each asks first;
+ * declining needs a reason, cancelling may give one, both emailed.
  */
 export function BookingStatusActions({
     booking,
@@ -46,9 +88,14 @@ export function BookingStatusActions({
     booking: Booking;
     compact?: boolean;
 }) {
-    const [isDeclineOpen, setIsDeclineOpen] = useState(false);
+    const [pendingMove, setPendingMove] = useState<FinalStatus | null>(null);
     const isRequest = booking.status.value === 'pending';
-    const buttons = booking.next_statuses
+    // A trip can only be completed once it has started.
+    const hasStarted = parseISO(booking.start_date) <= new Date();
+    const nextStatuses = booking.next_statuses.filter(
+        ({ value }) => value !== 'completed' || hasStarted,
+    );
+    const buttons = nextStatuses
         .filter(({ value }) => buttonStatuses.includes(value))
         .sort(
             (a, b) =>
@@ -56,15 +103,15 @@ export function BookingStatusActions({
                 buttonStatuses.indexOf(b.value),
         );
     // Declining already covers "cancel" for a request.
-    const menu = booking.next_statuses.filter(
+    const menu = nextStatuses.filter(
         ({ value }) =>
             !buttonStatuses.includes(value) &&
             !(isRequest && value === 'cancelled'),
     );
 
     function choose(status: BookingStatus): void {
-        if (status === 'declined') {
-            setIsDeclineOpen(true);
+        if (status in finalMoves) {
+            setPendingMove(status as FinalStatus);
         } else {
             update(status);
         }
@@ -74,7 +121,14 @@ export function BookingStatusActions({
         router.patch(
             BookingController.update.url(booking.reference),
             { status },
-            { preserveScroll: true },
+            {
+                preserveScroll: true,
+                // e.g. the request expired while the page was open.
+                onError: (errors) =>
+                    toast.error(
+                        errors.status ?? "Couldn't update this booking.",
+                    ),
+            },
         );
     }
 
@@ -105,7 +159,7 @@ export function BookingStatusActions({
                                     size="icon"
                                     variant="outline"
                                     className="size-8 rounded-full"
-                                    aria-label="More actions"
+                                    tooltip="More actions"
                                 >
                                     <MoreHorizontal />
                                 </Button>
@@ -130,7 +184,7 @@ export function BookingStatusActions({
                     )}
                 </>
             ) : (
-                booking.next_statuses.map(({ value }) => (
+                nextStatuses.map(({ value }) => (
                     <Button
                         key={value}
                         size="sm"
@@ -142,52 +196,101 @@ export function BookingStatusActions({
                 ))
             )}
 
-            <Dialog open={isDeclineOpen} onOpenChange={setIsDeclineOpen}>
+            <Dialog
+                open={pendingMove !== null}
+                onOpenChange={(isOpen) => !isOpen && setPendingMove(null)}
+            >
                 <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Decline {booking.reference}?</DialogTitle>
-                        <DialogDescription>
-                            The renter will receive your reason by email.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <Form
-                        {...BookingController.update.form(booking.reference)}
-                        options={{ preserveScroll: true }}
-                        onSuccess={() => setIsDeclineOpen(false)}
-                        className="space-y-4"
-                    >
-                        {({ processing, errors }) => (
-                            <>
-                                <input
-                                    type="hidden"
-                                    name="status"
-                                    value="declined"
-                                />
-                                <FormField
-                                    id={`reason-${booking.id}`}
-                                    label="Reason"
-                                    error={errors.reason ?? errors.status}
-                                >
-                                    <Textarea
-                                        id={`reason-${booking.id}`}
-                                        name="reason"
-                                        required
-                                        rows={3}
-                                        placeholder="e.g. The car is under maintenance on those dates."
-                                    />
-                                </FormField>
-                                <DialogFooter>
-                                    <Button
-                                        type="submit"
-                                        variant="destructive"
-                                        disabled={processing}
-                                    >
-                                        Decline booking
-                                    </Button>
-                                </DialogFooter>
-                            </>
-                        )}
-                    </Form>
+                    {pendingMove && (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle>
+                                    {finalMoves[pendingMove].title}{' '}
+                                    {booking.reference}?
+                                </DialogTitle>
+                                <DialogDescription>
+                                    {finalMoves[pendingMove].description}
+                                </DialogDescription>
+                            </DialogHeader>
+                            <Form
+                                {...BookingController.update.form(
+                                    booking.reference,
+                                )}
+                                options={{ preserveScroll: true }}
+                                onSuccess={() => setPendingMove(null)}
+                                className="space-y-4"
+                            >
+                                {({ processing, errors }) => (
+                                    <>
+                                        <input
+                                            type="hidden"
+                                            name="status"
+                                            value={pendingMove}
+                                        />
+                                        {finalMoves[pendingMove].reason ? (
+                                            <FormField
+                                                id={`reason-${booking.id}`}
+                                                label={
+                                                    finalMoves[pendingMove]
+                                                        .reason === 'required'
+                                                        ? 'Reason'
+                                                        : 'Reason (optional)'
+                                                }
+                                                error={
+                                                    errors.reason ??
+                                                    errors.status
+                                                }
+                                            >
+                                                <Textarea
+                                                    id={`reason-${booking.id}`}
+                                                    name="reason"
+                                                    required={
+                                                        finalMoves[pendingMove]
+                                                            .reason ===
+                                                        'required'
+                                                    }
+                                                    maxLength={500}
+                                                    rows={3}
+                                                    placeholder={
+                                                        finalMoves[pendingMove]
+                                                            .placeholder
+                                                    }
+                                                />
+                                            </FormField>
+                                        ) : (
+                                            errors.status && (
+                                                <p className="text-sm text-destructive">
+                                                    {errors.status}
+                                                </p>
+                                            )
+                                        )}
+                                        <DialogFooter>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                onClick={() =>
+                                                    setPendingMove(null)
+                                                }
+                                            >
+                                                Keep booking
+                                            </Button>
+                                            <Button
+                                                type="submit"
+                                                variant={
+                                                    pendingMove === 'completed'
+                                                        ? 'default'
+                                                        : 'destructive'
+                                                }
+                                                disabled={processing}
+                                            >
+                                                {finalMoves[pendingMove].button}
+                                            </Button>
+                                        </DialogFooter>
+                                    </>
+                                )}
+                            </Form>
+                        </>
+                    )}
                 </DialogContent>
             </Dialog>
         </div>
