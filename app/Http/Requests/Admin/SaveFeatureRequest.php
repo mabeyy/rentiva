@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Enums\FeatureCategory;
+use App\Enums\FeatureVehicle;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -25,6 +27,8 @@ class SaveFeatureRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:50', Rule::unique('features')->ignore($this->route('feature'))],
+            'category' => ['required', Rule::enum(FeatureCategory::class)],
+            'vehicles' => ['required', Rule::enum(FeatureVehicle::class)],
         ];
     }
 }

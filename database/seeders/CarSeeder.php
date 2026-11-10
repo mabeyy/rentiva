@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Enums\BodyType;
 use App\Enums\CarStatus;
 use App\Enums\Drivetrain;
+use App\Enums\FeatureVehicle;
 use App\Enums\FuelType;
 use App\Enums\Transmission;
 use App\Models\Booking;
@@ -102,7 +103,8 @@ class CarSeeder extends Seeder
         $pickupLocations = $lessors->mapWithKeys(fn (User $lessor): array => [
             $lessor->id => $this->createPickupLocations($lessor),
         ]);
-        $featureIds = Feature::pluck('id');
+        $carFeatureIds = Feature::whereIn('vehicles', [FeatureVehicle::Cars, FeatureVehicle::All])->pluck('id');
+        $twoWheelerFeatureIds = Feature::whereIn('vehicles', [FeatureVehicle::TwoWheelers, FeatureVehicle::All])->pluck('id');
 
         foreach (self::FLEET as $index => [$photo, $make, $model, $year, $bodyType, $fuelType, $drivetrain, $seats, $luggage, $color, $rate, $city, $highway]) {
             $owner = $lessors[$index % $lessors->count()];
@@ -133,9 +135,9 @@ class CarSeeder extends Seeder
                     'status' => in_array($index, [13, 14], true) ? CarStatus::PendingReview : CarStatus::Active,
                 ]);
 
-            if (! $bodyType->isTwoWheeler()) {
-                $car->features()->attach($featureIds->random(6));
-            }
+            $car->features()->attach($bodyType->isTwoWheeler()
+                ? $twoWheelerFeatureIds->random(min(3, $twoWheelerFeatureIds->count()))
+                : $carFeatureIds->random(min(8, $carFeatureIds->count())));
 
             $this->attachPhotos($car, $photo);
 
@@ -150,7 +152,7 @@ class CarSeeder extends Seeder
      */
     private function createPickupLocations(User $lessor): array
     {
-        $city = $lessor->storefront?->city ?? 'Makati City';
+        $city = $lessor->storefront->city ?? 'Makati City';
 
         return array_map(
             fn (array $location): PickupLocation => $lessor->pickupLocations()->create([

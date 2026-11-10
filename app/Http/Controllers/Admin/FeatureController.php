@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\FeatureCategory;
+use App\Enums\FeatureVehicle;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\SaveFeatureRequest;
 use App\Http\Resources\FeatureResource;
@@ -19,6 +21,8 @@ class FeatureController extends Controller
     {
         return Inertia::render('admin/features/index', [
             'features' => FeatureResource::collection(Feature::withCount('cars')->orderBy('name')->get()),
+            'categories' => FeatureCategory::options(),
+            'vehicleOptions' => FeatureVehicle::options(),
         ]);
     }
 
@@ -35,13 +39,13 @@ class FeatureController extends Controller
     }
 
     /**
-     * Rename a feature.
+     * Rename or regroup a feature.
      */
     public function update(SaveFeatureRequest $request, Feature $feature): RedirectResponse
     {
         $feature->update($request->validated());
 
-        Inertia::flash('toast', ['type' => 'success', 'message' => __('Feature renamed.')]);
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Feature saved.')]);
 
         return back();
     }

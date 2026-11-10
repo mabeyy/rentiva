@@ -21,6 +21,8 @@ class FeatureResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->name,
+            'category' => $this->category->value,
+            'vehicles' => $this->vehicles->value,
             'cars_count' => $this->whenCounted('cars'),
         ];
     }
