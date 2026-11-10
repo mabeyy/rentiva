@@ -10,7 +10,8 @@ use Symfony\Component\HttpFoundation\Response;
 
 /**
  * While an admin views the app as an owner, the owner's own account (profile,
- * email, password, two-factor, passkeys, deletion) stays off-limits.
+ * email, password, two-factor, passkeys, deletion) stays off-limits, and so
+ * do their plan, invoice payments and staff: those are the owner's to decide.
  */
 class BlockAccountChangesWhileImpersonating
 {
@@ -22,6 +23,12 @@ class BlockAccountChangesWhileImpersonating
     public function handle(Request $request, Closure $next): Response
     {
         $isImpersonating = $request->hasSession() && $request->session()->has(ImpersonationController::SESSION_KEY);
+
+        if ($isImpersonating && ! $request->isMethod('GET') && $request->is('lessor/billing', 'lessor/billing/*', 'lessor/team', 'lessor/team/*')) {
+            Inertia::flash('toast', ['type' => 'error', 'message' => __('Billing and team changes are the owner\'s to make, so they\'re off while viewing as an owner.')]);
+
+            return back();
+        }
 
         if ($isImpersonating && ($request->is('settings', 'settings/*', 'user/*'))) {
             abort_unless($request->isMethod('GET'), Response::HTTP_FORBIDDEN);

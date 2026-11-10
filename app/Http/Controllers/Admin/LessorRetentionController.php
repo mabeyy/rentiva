@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\UpdateLessorRetentionRequest;
+use App\Models\AdminAction;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
@@ -24,6 +25,10 @@ class LessorRetentionController extends Controller
             'proof_retention_days' => $request->integer('proof_retention_days') ?: null,
         ]);
 
+        AdminAction::record($lessor, 'retention_changed', __(':months months, proofs :days days', [
+            'months' => $lessor->storefront->data_retention_months ?? 'default',
+            'days' => $lessor->storefront->proof_retention_days ?? 'default',
+        ]));
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Retention saved.')]);
 
         return back();

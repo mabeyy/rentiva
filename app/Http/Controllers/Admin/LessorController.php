@@ -10,6 +10,7 @@ use App\Http\Requests\Admin\UpdateLessorStatusRequest;
 use App\Http\Resources\BookingResource;
 use App\Http\Resources\CarResource;
 use App\Http\Resources\LessorResource;
+use App\Models\AdminAction;
 use App\Models\Invoice;
 use App\Models\Plan;
 use App\Models\Setting;
@@ -73,6 +74,12 @@ class LessorController extends Controller
                 'plan_id' => $lessor->subscription->plan_id,
                 'paused' => $lessor->isBillingPaused(),
                 'priority_support' => $lessor->planIncludes('priority_support'),
+                'billing_cycle' => $lessor->subscription->billing_cycle,
+                'paid_through' => $lessor->subscription->current_period_end?->toDateString(),
+                'ends_on' => $lessor->subscription->cancelled_at ? $lessor->subscription->current_period_end?->toDateString() : null,
+                'pending_plan' => $lessor->subscription->pending_plan_id || $lessor->subscription->pending_billing_cycle
+                    ? ($lessor->subscription->pendingPlan->name ?? $lessor->subscription->plan?->name).' ('.($lessor->subscription->pending_billing_cycle ?? $lessor->subscription->billing_cycle).')'
+                    : null,
             ] : null,
             'plans' => Plan::query()->orderBy('sort')->orderBy('price')->get(['id', 'name', 'price']),
             'invoices' => $lessor->invoices()->latest('period_start')->limit(5)->get()->map(fn (Invoice $invoice): array => [
@@ -96,8 +103,18 @@ class LessorController extends Controller
     {
         abort_unless($lessor->hasRole(UserRole::Lessor), 404);
 
+        $wasSuspended = $lessor->status === UserStatus::Suspended;
         $lessor->status = $request->enum('status', UserStatus::class);
         $lessor->save();
+
+        // Coming back from a suspension: billing restarts today rather than
+        // invoicing every period they couldn't use.
+        $subscription = $lessor->subscription;
+
+        if ($wasSuspended && $lessor->status === UserStatus::Active && $subscription?->current_period_end?->lt(today())) {
+            $subscription->update(['current_period_end' => today()->subDay(), 'anchor_day' => null]);
+        }
+        AdminAction::record($lessor, $lessor->status === UserStatus::Suspended ? 'owner_suspended' : 'owner_reinstated');
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __(':name is now :status.', [
             'name' => $lessor->name,

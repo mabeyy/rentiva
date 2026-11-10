@@ -129,12 +129,101 @@ function SupportForm({ support }: { support: Support }) {
     );
 }
 
+type DataProtection = {
+    legal_name: string | null;
+    dpo_name: string | null;
+    dpo_email: string | null;
+};
+
+/** Who answers for personal data, named on both privacy notices. */
+function DataProtectionForm({
+    dataProtection,
+}: {
+    dataProtection: DataProtection;
+}) {
+    const form = useForm({
+        legal_name: dataProtection.legal_name ?? '',
+        dpo_name: dataProtection.dpo_name ?? '',
+        dpo_email: dataProtection.dpo_email ?? '',
+    });
+
+    return (
+        <form
+            onSubmit={(event) => {
+                event.preventDefault();
+                form.put(SettingController.updateDataProtection.url(), {
+                    preserveScroll: true,
+                });
+            }}
+        >
+            <FormSection
+                title="Data protection"
+                description="The Data Privacy Act requires a Data Protection Officer that people can contact. These details appear on the privacy notices, and are the same ones you register with the National Privacy Commission."
+            >
+                <div className="grid gap-5 sm:grid-cols-2">
+                    <FormField
+                        id="legal_name"
+                        label="Registered business name"
+                        error={form.errors.legal_name}
+                        hint="As on your DTI or SEC registration."
+                        className="sm:col-span-2"
+                    >
+                        <Input
+                            id="legal_name"
+                            value={form.data.legal_name}
+                            onChange={(event) =>
+                                form.setData('legal_name', event.target.value)
+                            }
+                        />
+                    </FormField>
+                    <FormField
+                        id="dpo_name"
+                        label="Data Protection Officer"
+                        error={form.errors.dpo_name}
+                    >
+                        <Input
+                            id="dpo_name"
+                            value={form.data.dpo_name}
+                            onChange={(event) =>
+                                form.setData('dpo_name', event.target.value)
+                            }
+                            placeholder="Full name"
+                        />
+                    </FormField>
+                    <FormField
+                        id="dpo_email"
+                        label="DPO email"
+                        error={form.errors.dpo_email}
+                    >
+                        <Input
+                            id="dpo_email"
+                            type="email"
+                            value={form.data.dpo_email}
+                            onChange={(event) =>
+                                form.setData('dpo_email', event.target.value)
+                            }
+                            placeholder="dpo@rentiva.ph"
+                        />
+                    </FormField>
+                </div>
+                <div className="mt-5 flex justify-end">
+                    <Button type="submit" disabled={form.processing}>
+                        Save data protection details
+                    </Button>
+                </div>
+            </FormSection>
+        </form>
+    );
+}
+
 export default function AdminSettings({
     settings,
     overrideCount,
     support,
+    dataProtection,
 }: {
     support: Support;
+    dataProtection: DataProtection;
     settings: Settings;
     /** Owners the admin has given their own retention periods. */
     overrideCount: number;
@@ -216,6 +305,8 @@ export default function AdminSettings({
                         </>
                     )}
                 </Form>
+
+                <DataProtectionForm dataProtection={dataProtection} />
 
                 <SupportForm support={support} />
             </div>

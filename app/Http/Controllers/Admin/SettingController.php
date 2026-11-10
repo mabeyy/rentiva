@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\UpdateSettingsRequest;
+use App\Models\AdminAction;
 use App\Models\Setting;
 use App\Models\Storefront;
 use Illuminate\Http\RedirectResponse;
@@ -29,6 +30,11 @@ class SettingController extends Controller
                 'priority_phone' => Setting::get(Setting::PriorityPhone),
                 'priority_response_hours' => (int) Setting::get(Setting::PriorityResponseHours),
             ],
+            'dataProtection' => [
+                'legal_name' => Setting::get(Setting::LegalName),
+                'dpo_name' => Setting::get(Setting::DpoName),
+                'dpo_email' => Setting::get(Setting::DpoEmail),
+            ],
             'overrideCount' => Storefront::query()
                 ->where(fn ($query) => $query->whereNotNull('data_retention_months')->orWhereNotNull('proof_retention_days'))
                 ->count(),
@@ -45,6 +51,8 @@ class SettingController extends Controller
         }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Settings saved.')]);
+
+        AdminAction::record(null, 'settings_changed');
 
         return to_route('admin.settings.edit');
     }
@@ -66,6 +74,30 @@ class SettingController extends Controller
         }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Support details saved.')]);
+
+        AdminAction::record(null, 'settings_changed');
+
+        return to_route('admin.settings.edit');
+    }
+
+    /**
+     * Save who is responsible for personal data, for the privacy notices.
+     */
+    public function updateDataProtection(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'legal_name' => ['nullable', 'string', 'max:120'],
+            'dpo_name' => ['nullable', 'string', 'max:100'],
+            'dpo_email' => ['nullable', 'email', 'max:255'],
+        ]);
+
+        foreach ($data as $key => $value) {
+            Setting::put($key, $value);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Data protection details saved.')]);
+
+        AdminAction::record(null, 'settings_changed');
 
         return to_route('admin.settings.edit');
     }

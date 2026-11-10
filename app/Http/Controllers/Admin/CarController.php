@@ -9,6 +9,7 @@ use App\Http\Resources\BookingResource;
 use App\Http\Resources\CarBlockResource;
 use App\Http\Resources\CarResource;
 use App\Http\Resources\LessorResource;
+use App\Models\AdminAction;
 use App\Models\Car;
 use App\Notifications\CarStatusChanged;
 use Illuminate\Http\RedirectResponse;
@@ -73,6 +74,17 @@ class CarController extends Controller
         ]);
 
         $car->owner->notify(new CarStatusChanged($car));
+
+        $logged = match ($status) {
+            CarStatus::Active => 'listing_approved',
+            CarStatus::Rejected => 'listing_rejected',
+            CarStatus::Suspended => 'listing_suspended',
+            default => null,
+        };
+
+        if ($logged) {
+            AdminAction::record($car, $logged, $request->validated('reason'));
+        }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __(':car is now :status.', [
             'car' => $car->name,
