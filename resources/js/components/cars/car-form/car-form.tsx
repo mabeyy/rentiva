@@ -2,6 +2,7 @@ import { Form } from '@inertiajs/react';
 import { useState } from 'react';
 import { FormSaveBar } from '@/components/form-save-bar';
 import { FormSection } from '@/components/lessor/form-section';
+import type { Extras } from '@/components/lessor/extras-fields';
 import { isTwoWheeler } from '@/lib/vehicle';
 import lessor from '@/routes/lessor';
 import type { Car, CarSpecOptions, Feature, PickupLocation } from '@/types';
@@ -18,7 +19,19 @@ export type CarFormOptions = CarSpecOptions & {
     pickupLocations: PickupLocation[];
     /** Pre-selected for new listings. */
     mainPickupLocationId: number | null;
+    /** The business-wide discounts, extras and deposit cars follow by default. */
+    defaultExtras: Extras;
 };
+
+/** The form's sections in order, for the edit page's section menu. */
+export const carFormSections = [
+    { id: 'car-basics', label: 'Basic information' },
+    { id: 'car-photos', label: 'Photos' },
+    { id: 'car-pricing', label: 'Pricing & extras' },
+    { id: 'car-specs', label: 'Specifications' },
+    { id: 'car-features', label: 'Features' },
+    { id: 'car-papers', label: 'Papers' },
+] as const;
 
 /**
  * Create/edit form for a listing. Field names match the Laravel form requests.
@@ -28,17 +41,21 @@ export function CarForm({
     car,
     options,
     submitLabel,
+    numbered = true,
 }: {
     form: RouteFormDefinition<'post'>;
     car?: Car;
     options: CarFormOptions;
     submitLabel: string;
+    /** Number the sections like steps; on for a new listing, off when editing. */
+    numbered?: boolean;
 }) {
     const {
         bodyTypes,
         features,
         pickupLocations,
         mainPickupLocationId,
+        defaultExtras,
         ...specOptions
     } = options;
     const [bodyType, setBodyType] = useState<string | null>(
@@ -54,7 +71,8 @@ export function CarForm({
             {({ processing, errors, progress }) => (
                 <>
                     <FormSection
-                        step={1}
+                        id="car-basics"
+                        step={numbered ? 1 : undefined}
                         title="Basic information"
                         description="What renters see first."
                     >
@@ -68,14 +86,32 @@ export function CarForm({
                         />
                     </FormSection>
                     <FormSection
-                        step={2}
-                        title="Pricing & extras"
-                        description="Your daily rate, deposit, long-stay discounts, and delivery or a driver if you offer them."
+                        id="car-photos"
+                        step={numbered ? 2 : undefined}
+                        title="Photos"
+                        description="The first photo is the cover. Add at least one."
                     >
-                        <PricingSection car={car} errors={errors} />
+                        <PhotosSection
+                            key={car?.images?.map((image) => image.id).join()}
+                            existingImages={car?.images}
+                            errors={errors}
+                        />
                     </FormSection>
                     <FormSection
-                        step={3}
+                        id="car-pricing"
+                        step={numbered ? 3 : undefined}
+                        title="Pricing & extras"
+                        description="The daily rate, plus discounts, deposit, delivery and a driver."
+                    >
+                        <PricingSection
+                            car={car}
+                            defaults={defaultExtras}
+                            errors={errors}
+                        />
+                    </FormSection>
+                    <FormSection
+                        id="car-specs"
+                        step={numbered ? 4 : undefined}
                         title="Specifications"
                         description="Capacity, transmission and fuel economy."
                     >
@@ -87,32 +123,23 @@ export function CarForm({
                         />
                     </FormSection>
                     <FormSection
-                        step={4}
+                        id="car-features"
+                        step={numbered ? 5 : undefined}
                         title="Features"
-                        description="Select everything the car comes with."
+                        description="Tick everything it comes with. Only features that fit the vehicle type show."
                     >
                         <FeaturesSection
                             features={features}
                             selected={car?.features ?? []}
+                            isTwoWheeler={isTwoWheeler(bodyType)}
                             error={errors.features}
                         />
                     </FormSection>
                     <FormSection
-                        step={5}
-                        title="Photos"
-                        description="The first photo is the cover. Add at least one."
-                    >
-                        <PhotosSection
-                            key={car?.images?.map((image) => image.id).join()}
-                            existingImages={car?.images}
-                            errors={errors}
-                        />
-                    </FormSection>
-
-                    <FormSection
-                        step={6}
+                        id="car-papers"
+                        step={numbered ? 6 : undefined}
                         title="Papers"
-                        description="Optional. Only you see these, and we remind you before they run out."
+                        description="Optional. Only you see these, and we remind you before the registration runs out."
                     >
                         <PapersSection car={car} errors={errors} />
                     </FormSection>

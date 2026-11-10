@@ -30,9 +30,8 @@ export default function LessorCarsIndex({ cars }: { cars: Car[] }) {
         <>
             <Head title="My cars" />
 
-            <div className="space-y-8 p-4 md:p-8">
+            <div className="mx-auto w-full max-w-7xl space-y-8 p-4 md:p-8">
                 <PageHeader
-                    eyebrow="Your fleet"
                     title="My cars"
                     description="Listings go live after an admin approves them."
                     actions={

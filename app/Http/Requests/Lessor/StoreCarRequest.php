@@ -4,6 +4,7 @@ namespace App\Http\Requests\Lessor;
 
 use App\Enums\BodyType;
 use App\Enums\Drivetrain;
+use App\Enums\FeatureVehicle;
 use App\Enums\FuelType;
 use App\Enums\Transmission;
 use App\Models\Car;
@@ -35,6 +36,9 @@ class StoreCarRequest extends FormRequest
         if ($this->isTwoWheeler()) {
             $this->merge(['doors' => null, 'drivetrain' => null]);
         }
+
+        // An unchecked switch sends nothing; treat that as following the defaults.
+        $this->merge(['custom_extras' => $this->boolean('custom_extras')]);
     }
 
     /**
@@ -61,18 +65,19 @@ class StoreCarRequest extends FormRequest
             'pickup_location_id' => ['required', 'integer', Rule::exists('pickup_locations', 'id')->where('owner_id', $this->user()->id)],
             'description' => ['nullable', 'string', 'max:2000'],
             'daily_rate' => ['required', 'numeric', 'between:300,100000'],
-            'security_deposit' => ['nullable', 'numeric', 'between:0,200000'],
+            'custom_extras' => ['boolean'],
+            'deposit_percent' => ['nullable', 'integer', 'between:0,100'],
             'weekly_discount' => ['nullable', 'integer', 'between:0,50'],
             'monthly_discount' => ['nullable', 'integer', 'between:0,70'],
             'delivery_fee' => ['nullable', 'numeric', 'between:0,20000'],
             'driver_daily_rate' => ['nullable', 'numeric', 'between:0,20000'],
             'plate_number' => ['nullable', 'string', 'max:15'],
             'registration_expires_on' => ['nullable', 'date_format:Y-m-d'],
-            'insurance_expires_on' => ['nullable', 'date_format:Y-m-d'],
             'features' => ['array'],
-            'features.*' => ['integer', 'exists:features,id'],
+            // Only features that fit the vehicle, e.g. no Apple CarPlay on a scooter.
+            'features.*' => ['integer', Rule::exists('features', 'id')->whereIn('vehicles', [FeatureVehicle::All->value, $this->isTwoWheeler() ? FeatureVehicle::TwoWheelers->value : FeatureVehicle::Cars->value])],
             'images' => ['required', 'array', 'min:1', 'max:'.self::MAX_IMAGES],
-            'images.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'images.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
         ];
     }
 
@@ -84,7 +89,7 @@ class StoreCarRequest extends FormRequest
     public function after(): array
     {
         return [function (Validator $validator): void {
-            $limit = $this->user()->subscription?->plan?->max_cars;
+            $limit = $this->user()->planLimit('max_cars');
 
             if ($this->route('car') === null && $limit !== null && $this->user()->cars()->count() >= $limit) {
                 $validator->errors()->add('make', __('Your plan allows :count cars. Upgrade under Billing to add more.', ['count' => $limit]));

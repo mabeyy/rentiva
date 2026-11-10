@@ -22,7 +22,7 @@ function expiryHint(date: string | null | undefined): string | undefined {
 }
 
 /**
- * Plate number and the paperwork dates Rentiva reminds the owner about.
+ * Plate number and the registration date Rentiva reminds the owner about.
  * Only the owner sees these; the plate prints on the rental agreement.
  */
 export function PapersSection({
@@ -33,7 +33,7 @@ export function PapersSection({
     errors: FormErrors;
 }) {
     return (
-        <div className="grid gap-5 sm:grid-cols-3">
+        <div className="grid gap-5 sm:grid-cols-2">
             <FormField
                 id="plate_number"
                 label="Plate number"
@@ -52,6 +52,7 @@ export function PapersSection({
             <FormField
                 id="registration_expires_on"
                 label="Registration expires"
+                info="CTPL insurance renews together with the LTO registration, so this one date covers both."
                 error={errors.registration_expires_on}
                 hint={expiryHint(car?.registration_expires_on)}
             >
@@ -60,19 +61,6 @@ export function PapersSection({
                     name="registration_expires_on"
                     type="date"
                     defaultValue={car?.registration_expires_on ?? ''}
-                />
-            </FormField>
-            <FormField
-                id="insurance_expires_on"
-                label="Insurance expires"
-                error={errors.insurance_expires_on}
-                hint={expiryHint(car?.insurance_expires_on)}
-            >
-                <Input
-                    id="insurance_expires_on"
-                    name="insurance_expires_on"
-                    type="date"
-                    defaultValue={car?.insurance_expires_on ?? ''}
                 />
             </FormField>
         </div>

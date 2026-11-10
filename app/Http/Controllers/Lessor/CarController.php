@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Lessor;
 use App\Actions\Cars\DeleteCar;
 use App\Actions\Cars\SaveCar;
 use App\Concerns\ProvidesCarOptions;
+use App\Enums\CarStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Lessor\StoreCarRequest;
 use App\Http\Requests\Lessor\UpdateCarRequest;
@@ -13,6 +14,7 @@ use App\Http\Resources\FeatureResource;
 use App\Http\Resources\PickupLocationResource;
 use App\Models\Car;
 use App\Models\Feature;
+use App\Models\Storefront;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -73,6 +75,8 @@ class CarController extends Controller
         return Inertia::render('lessor/cars/edit', [
             'car' => CarResource::make($car->load(['images', 'features', 'owner.storefront'])),
             'upcomingBlocksCount' => $car->blocks()->upcoming()->count(),
+            // A booked car can't be deleted: its trips, payments and reviews stay on record.
+            'hasBookings' => $car->bookings()->exists(),
             'services' => $car->services()->limit(20)->get()->map(fn ($service): array => [
                 'id' => $service->id,
                 'serviced_on' => $service->serviced_on->toDateString(),
@@ -89,7 +93,9 @@ class CarController extends Controller
      */
     public function update(UpdateCarRequest $request, Car $car, SaveCar $saveCar): RedirectResponse
     {
-        $saveCar->handle(
+        $wasApproved = in_array($car->status, [CarStatus::Active, CarStatus::Inactive], true);
+
+        $car = $saveCar->handle(
             $car,
             $request->safe()->except(['features', 'images', 'removed_image_ids']),
             $request->validated('features', []),
@@ -97,13 +103,16 @@ class CarController extends Controller
             $request->validated('removed_image_ids', []),
         );
 
-        Inertia::flash('toast', ['type' => 'success', 'message' => __('Car updated.')]);
+        Inertia::flash('toast', $wasApproved && $car->status === CarStatus::PendingReview
+            ? ['type' => 'info', 'message' => __('Car updated. Because the make, model, year, type or plate changed, it\'s back with Rentiva for a quick review before it shows again.')]
+            : ['type' => 'success', 'message' => __('Car updated.')]);
 
         return to_route('lessor.cars.edit', $car);
     }
 
     /**
-     * Delete a car that has no upcoming bookings.
+     * Delete a car that has never been booked. Booked cars are switched off
+     * instead, so their trips, payments and reviews stay on record.
      */
     public function destroy(Car $car, DeleteCar $deleteCar): RedirectResponse
     {
@@ -128,6 +137,7 @@ class CarController extends Controller
             'features' => FeatureResource::collection(Feature::orderBy('name')->get()),
             'pickupLocations' => PickupLocationResource::collection($request->user()->pickupLocations()->orderBy('city')->orderBy('address')->get()),
             'mainPickupLocationId' => $request->user()->storefront?->main_pickup_location_id,
+            'defaultExtras' => ($request->user()->storefront ?? new Storefront)->defaultExtras(),
         ];
     }
 }

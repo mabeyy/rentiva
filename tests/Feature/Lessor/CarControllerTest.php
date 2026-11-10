@@ -75,6 +75,23 @@ describe('store', function () {
         Storage::disk('public')->assertExists($car->images->pluck('path')->all());
     });
 
+    test('a large car photo is shrunk to 1600px on its longest side and saved as WebP', function () {
+        Storage::fake('public');
+        $lessor = User::factory()->create();
+
+        $this->actingAs($lessor)->post(route('lessor.cars.store'), carPayload([
+            'pickup_location_id' => PickupLocation::factory()->for($lessor, 'owner')->create()->id,
+            'images' => [UploadedFile::fake()->image('front.jpg', 3000, 2000)],
+        ]))->assertSessionHasNoErrors();
+
+        $path = Car::sole()->images->sole()->path;
+        $size = getimagesizefromstring(Storage::disk('public')->get($path));
+
+        expect($path)->toEndWith('.webp')
+            ->and($size['mime'])->toBe('image/webp')
+            ->and([$size[0], $size[1]])->toBe([1600, 1067]);
+    });
+
     test('a lessor lists a scooter, which has no doors or drivetrain', function () {
         Storage::fake('public');
         $lessor = User::factory()->create();
@@ -96,6 +113,20 @@ describe('store', function () {
             ->drivetrain->toBeNull()
             ->doors->toBeNull()
             ->seats->toBe(2);
+    });
+
+    test('a scooter can list a helmet but not car-only features like Apple CarPlay', function () {
+        $helmet = Feature::factory()->forTwoWheelers()->create(['name' => 'Spare helmet']);
+        $carPlay = Feature::factory()->create(['name' => 'In-dash navigation']);
+        $scooter = fn (array $features) => carPayload(['body_type' => 'scooter', 'seats' => 2, 'features' => $features]);
+        $lessor = User::factory()->create();
+
+        $this->actingAs($lessor)
+            ->post(route('lessor.cars.store'), $scooter([$carPlay->id]))
+            ->assertSessionHasErrors('features.0');
+
+        $this->post(route('lessor.cars.store'), $scooter([$helmet->id]))
+            ->assertSessionDoesntHaveErrors('features.0');
     });
 
     test('a scooter carries at most two riders', function () {
@@ -176,12 +207,11 @@ describe('update', function () {
 });
 
 describe('destroy', function () {
-    test('a lessor deletes a car without upcoming bookings along with its photos', function () {
+    test('a lessor deletes a car that was never booked, along with its photos', function () {
         Storage::fake('public');
         $car = Car::factory()->create();
         $image = CarImage::factory()->for($car)->create();
         Storage::disk('public')->put($image->path, 'photo');
-        Booking::factory()->for($car)->cancelled()->create();
 
         $this->actingAs($car->owner)
             ->delete(route('lessor.cars.destroy', $car))
@@ -189,6 +219,17 @@ describe('destroy', function () {
 
         expect(Car::count())->toBe(0);
         Storage::disk('public')->assertMissing($image->path);
+    });
+
+    test('a car with past bookings can\'t be deleted, so its trips and payments stay on record', function () {
+        $car = Car::factory()->create();
+        Booking::factory()->for($car)->cancelled()->create();
+
+        $this->actingAs($car->owner)
+            ->delete(route('lessor.cars.destroy', $car))
+            ->assertForbidden();
+
+        expect(Car::count())->toBe(1);
     });
 
     test('a car with a confirmed booking cannot be deleted', function () {
@@ -245,4 +286,17 @@ describe('activation', function () {
             ->put(route('lessor.cars.activation.update', $car), ['active' => false])
             ->assertForbidden();
     });
+});
+
+test('changing an approved car\'s make, model or year sends it back for review; a new price doesn\'t', function () {
+    $car = Car::factory()->create(['status' => CarStatus::Active, 'body_type' => 'sedan']);
+    CarImage::factory()->for($car)->create();
+    $same = ['make' => $car->make, 'model' => $car->model, 'year' => $car->year, 'body_type' => $car->body_type->value, 'pickup_location_id' => $car->pickup_location_id, 'plate_number' => $car->plate_number];
+    $this->actingAs($car->owner);
+
+    $this->put(route('lessor.cars.update', $car), carPayload([...$same, 'daily_rate' => 3100]))->assertSessionHasNoErrors();
+    expect($car->fresh()->status)->toBe(CarStatus::Active);
+
+    $this->put(route('lessor.cars.update', $car), carPayload([...$same, 'make' => 'Ferrari', 'model' => 'Roma']))->assertSessionHasNoErrors();
+    expect($car->fresh()->status)->toBe(CarStatus::PendingReview);
 });

@@ -102,7 +102,7 @@ export function PhotosSection({
                 className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed p-6 text-sm text-muted-foreground hover:bg-muted/50"
             >
                 <ImagePlus className="size-6" />
-                Add photos (JPG, PNG or WebP, up to 5 MB each, max 10 photos)
+                Add photos (JPG, PNG or WebP, up to 10 MB each, max 10 photos)
             </label>
             <Input
                 id="images"

@@ -44,6 +44,7 @@ class CarPolicy
      */
     public function delete(User $user, Car $car): bool
     {
-        return $car->owner()->is($user) && ! $car->bookings()->reserving()->exists();
+        // Deleting removes the car's bookings with it, so only never-booked cars go.
+        return $car->owner()->is($user) && ! $car->bookings()->exists();
     }
 }

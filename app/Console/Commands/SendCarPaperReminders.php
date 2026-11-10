@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Enums\UserStatus;
 use App\Models\Car;
 use App\Notifications\CarPaperExpiring;
 use Illuminate\Console\Attributes\Description;
@@ -9,33 +10,39 @@ use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 
 #[Signature('cars:remind-papers')]
-#[Description('Remind owners 30 days, 7 days and on the day a car\'s registration or insurance runs out.')]
+#[Description('Remind owners 30 days, 7 days and on the day a car\'s registration runs out.')]
 class SendCarPaperReminders extends Command
 {
     /** Days before expiry that a reminder goes out. */
     public const array REMIND_AT = [30, 7, 0];
 
     /**
-     * Execute the console command.
+     * Execute the console command. Each reminder goes out once per expiry
+     * date; a day the scheduler missed is caught up on the next run.
      */
     public function handle(): int
     {
         $sent = 0;
-        $dates = array_map(fn (int $days): string => today()->addDays($days)->toDateString(), self::REMIND_AT);
 
-        foreach (['registration', 'insurance'] as $paper) {
-            Car::query()
-                ->where(function ($query) use ($paper, $dates): void {
-                    foreach ($dates as $date) {
-                        $query->orWhereDate("{$paper}_expires_on", $date);
-                    }
-                })
-                ->with('owner')
-                ->each(function (Car $car) use ($paper, &$sent): void {
-                    $car->owner->notify(new CarPaperExpiring($car, $paper, (int) today()->diffInDays($car->{"{$paper}_expires_on"}, false)));
-                    $sent++;
-                });
-        }
+        Car::query()
+            ->whereNotNull('registration_expires_on')
+            ->whereDate('registration_expires_on', '>=', today())
+            ->whereDate('registration_expires_on', '<=', today()->addDays(max(self::REMIND_AT)))
+            ->whereRelation('owner', 'status', UserStatus::Active)
+            ->with('owner')
+            ->each(function (Car $car) use (&$sent): void {
+                $daysLeft = (int) today()->diffInDays($car->registration_expires_on, false);
+                // The closest reminder point already reached, e.g. 7 when 5 days are left.
+                $due = collect(self::REMIND_AT)->filter(fn (int $days): bool => $daysLeft <= $days)->min();
+
+                if ($due === null || ($car->registration_reminded_at_days !== null && $car->registration_reminded_at_days <= $due)) {
+                    return;
+                }
+
+                $car->owner->notify(new CarPaperExpiring($car, 'registration', $daysLeft));
+                $car->forceFill(['registration_reminded_at_days' => $due])->saveQuietly();
+                $sent++;
+            });
 
         $this->info("Sent {$sent} ".str('reminder')->plural($sent).'.');
 

@@ -9,14 +9,18 @@ use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 /**
- * Reminds the owner that a car's registration or insurance runs out soon.
+ * Reminds the owner that a car's registration (and the CTPL insurance
+ * renewed with it) runs out soon.
  */
 class CarPaperExpiring extends Notification implements ShouldQueue
 {
     use Queueable;
 
+    /** Skip quietly if the booking, car or invoice was deleted before it sent. */
+    public bool $deleteWhenMissingModels = true;
+
     /**
-     * @param  string  $paper  "registration" or "insurance".
+     * @param  string  $paper  The paper running out: "registration".
      */
     public function __construct(public Car $car, public string $paper, public int $daysLeft) {}
 
@@ -61,7 +65,7 @@ class CarPaperExpiring extends Notification implements ShouldQueue
 
     private function body(): string
     {
-        $date = $this->paper === 'registration' ? $this->car->registration_expires_on : $this->car->insurance_expires_on;
+        $date = $this->car->registration_expires_on;
 
         return __('The :paper for :plate runs out on :date.', [
             'paper' => $this->paper,

@@ -146,7 +146,7 @@ export function CarsTable({
                                         variant="ghost"
                                         size="icon"
                                         className="rounded-full"
-                                        title={actionLabel}
+                                        tooltip={actionLabel}
                                         asChild
                                     >
                                         <Link href={actionHref(car)}>

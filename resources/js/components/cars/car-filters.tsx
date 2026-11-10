@@ -10,6 +10,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from '@/components/ui/popover';
+import { useDebouncedSearch } from '@/hooks/use-debounced-search';
 import { useQueryFilters } from '@/hooks/use-query-filters';
 import { toIsoDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -95,7 +96,9 @@ export function CarFilters({
     locations?: string[];
 }) {
     const { apply, reset } = useQueryFilters(route, filters);
-    const [search, setSearch] = useState(filters.search ?? '');
+    const [search, setSearch] = useDebouncedSearch(filters.search, (value) =>
+        apply({ search: value }),
+    );
     const [maxRate, setMaxRate] = useState(filters.max_rate ?? '');
     const activeMoreFilters = moreFilterKeys.filter((key) => filters[key]);
 
@@ -115,7 +118,7 @@ export function CarFilters({
                 }}
             />
 
-            <div className="-mx-4 flex min-w-0 flex-1 gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] lg:mx-0 lg:px-0 lg:pb-0">
+            <div className="-mx-4 flex min-w-0 flex-1 [scrollbar-width:none] gap-2 overflow-x-auto px-4 pb-1 lg:mx-0 lg:px-0 lg:pb-0">
                 {options.bodyTypes.length > 1 && (
                     <>
                         <Chip
@@ -187,7 +190,6 @@ export function CarFilters({
                                     onChange={(event) =>
                                         setSearch(event.target.value)
                                     }
-                                    onBlur={() => apply({ search })}
                                     placeholder="e.g. Toyota"
                                 />
                             </FormField>

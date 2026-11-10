@@ -17,6 +17,9 @@ export type CarImage = {
 export type Feature = {
     id: number;
     name: string;
+    category: 'comfort' | 'safety' | 'tech' | 'convenience';
+    /** Which vehicles the feature shows for. */
+    vehicles: 'cars' | 'two_wheelers' | 'all';
     cars_count?: number;
 };
 
@@ -46,7 +49,10 @@ export type Car = {
     /** Daily rate in centavos. */
     daily_rate: number;
     /** Refundable deposit in centavos, collected at pickup. */
-    security_deposit: number;
+    /** Refundable deposit as a percent of the rental. */
+    deposit_percent: number;
+    /** Whether the car has its own discounts, extras and deposit instead of the business defaults. */
+    custom_extras: boolean;
     /** Percent off rentals of 7+ days. */
     weekly_discount: number;
     /** Percent off rentals of 28+ days. */
@@ -57,7 +63,6 @@ export type Car = {
     driver_daily_rate: number | null;
     plate_number: string | null;
     registration_expires_on: string | null;
-    insurance_expires_on: string | null;
     status: Option<CarStatus>;
     rejection_reason: string | null;
     host_name?: string;

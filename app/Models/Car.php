@@ -46,17 +46,19 @@ use Illuminate\Support\Str;
  * @property int|null $pickup_location_id
  * @property string|null $description
  * @property int $daily_rate Daily rate in centavos.
- * @property int $security_deposit Refundable deposit in centavos, collected at pickup.
+ * @property int $deposit_percent Refundable deposit as a percent of the rental, collected at pickup.
+ * @property bool $custom_extras Whether the car has its own discounts, extras and deposit instead of the business defaults.
  * @property int $weekly_discount Percent off rentals of 7 days or more.
  * @property int $monthly_discount Percent off rentals of 28 days or more.
  * @property int|null $delivery_fee In centavos; null when the car isn't delivered.
  * @property int|null $driver_daily_rate In centavos per day; null when no driver is offered.
  * @property string|null $plate_number
  * @property CarbonImmutable|null $registration_expires_on
- * @property CarbonImmutable|null $insurance_expires_on
  * @property CarStatus $status
  * @property string|null $rejection_reason
  * @property-read string $name
+ * @property-read int|null $reviews_count Set by withCount('reviews').
+ * @property-read float|string|null $reviews_avg_rating Set by withAvg('reviews', 'rating').
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
@@ -65,8 +67,8 @@ use Illuminate\Support\Str;
     'make', 'model', 'year', 'body_type', 'transmission', 'fuel_type', 'drivetrain',
     'seats', 'doors', 'luggage_capacity', 'fuel_economy_city', 'fuel_economy_highway',
     'exterior_color', 'pickup_location_id', 'description', 'daily_rate', 'status', 'rejection_reason',
-    'security_deposit', 'weekly_discount', 'monthly_discount', 'delivery_fee', 'driver_daily_rate',
-    'plate_number', 'registration_expires_on', 'insurance_expires_on',
+    'deposit_percent', 'custom_extras', 'weekly_discount', 'monthly_discount', 'delivery_fee', 'driver_daily_rate',
+    'plate_number', 'registration_expires_on',
 ])]
 class Car extends Model
 {
@@ -76,7 +78,7 @@ class Car extends Model
     /**
      * Relations every car needs to render: its pickup location is shown wherever the car is.
      *
-     * @var array<int, string>
+     * @var list<string>
      */
     protected $with = ['pickupLocation'];
 
@@ -87,6 +89,10 @@ class Car extends Model
      */
     protected $attributes = [
         'status' => 'draft',
+        'custom_extras' => false,
+        'deposit_percent' => 0,
+        'weekly_discount' => 0,
+        'monthly_discount' => 0,
     ];
 
     /**
@@ -112,10 +118,10 @@ class Car extends Model
             'fuel_type' => FuelType::class,
             'drivetrain' => Drivetrain::class,
             'status' => CarStatus::class,
+            'custom_extras' => 'boolean',
             'fuel_economy_city' => 'float',
             'fuel_economy_highway' => 'float',
             'registration_expires_on' => 'immutable_date',
-            'insurance_expires_on' => 'immutable_date',
         ];
     }
 
@@ -194,7 +200,8 @@ class Car extends Model
      */
     public function reviews(): HasMany
     {
-        return $this->hasMany(Review::class);
+        // Reviews an admin hid stay off public pages and averages.
+        return $this->hasMany(Review::class)->whereNull('reviews.hidden_at');
     }
 
     /**
@@ -224,7 +231,7 @@ class Car extends Model
                 $user?->id === $this->owner_id => 'owner',
                 default => 'admin',
             },
-            'actor_name' => $impersonator?->name ?? $staff?->name ?? $user?->name ?? config('app.name'),
+            'actor_name' => $impersonator->name ?? $staff->name ?? $user->name ?? config('app.name'),
             'description' => $description,
         ]);
     }
@@ -298,10 +305,11 @@ class Car extends Model
      *
      * @return array<int, array{start_date: string, end_date: string}>
      */
-    public function upcomingBookedRanges(): array
+    public function upcomingBookedRanges(?Booking $except = null): array
     {
         return $this->bookings()
             ->reserving()
+            ->when($except, fn ($query, Booking $booking) => $query->whereKeyNot($booking->getKey()))
             ->whereDate('end_date', '>', today())
             ->orderBy('start_date')
             ->get(['start_date', 'end_date'])
