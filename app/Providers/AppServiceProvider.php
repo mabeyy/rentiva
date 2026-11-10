@@ -15,6 +15,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Inertia\ExceptionResponse;
+use Inertia\Inertia;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -33,6 +35,25 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureDefaults();
         $this->logEmailDeliveries();
+        $this->renderErrorPages();
+    }
+
+    /**
+     * Show not found, expired, forbidden and server errors as a Rentiva page
+     * with a way back, instead of Laravel's plain screen. Server errors keep
+     * Laravel's debug page while debugging.
+     */
+    protected function renderErrorPages(): void
+    {
+        Inertia::handleExceptionsUsing(function (ExceptionResponse $response) {
+            $status = $response->statusCode();
+
+            if (! in_array($status, [403, 404, 419, 429, 500, 503], true) || ($status >= 500 && config('app.debug'))) {
+                return null;
+            }
+
+            return $response->render('error', ['status' => $status])->withSharedData();
+        });
     }
 
     /**

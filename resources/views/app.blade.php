@@ -43,7 +43,7 @@
             $meta = [
                 'title' => config('app.name'),
                 'description' => 'Your own booking page for your car rental business. Renters book your cars directly and pay you at pickup.',
-                'image' => asset('images/landing/corolla-black.jpg'),
+                'image' => asset('images/og-default.jpg'),
                 'url' => url()->current(),
                 ...($meta ?? []),
             ];
