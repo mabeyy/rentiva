@@ -6,6 +6,8 @@ import {
     Users,
     Wallet,
 } from 'lucide-react';
+import type { PlatformTraffic } from '@/components/analytics/growth-funnel';
+import { GrowthFunnel } from '@/components/analytics/growth-funnel';
 import { RevenueChart } from '@/components/admin/revenue-chart';
 import type { AdminSetupStep } from '@/components/admin/setup-checklist';
 import { AdminSetupChecklist } from '@/components/admin/setup-checklist';
@@ -38,6 +40,7 @@ type Props = {
         monthRevenue: number;
     };
     subscriptions: SubscriptionMetrics;
+    traffic: PlatformTraffic;
     /** Null once everything is set up. */
     setup: AdminSetupStep[] | null;
     revenue: DailyRevenue[];
@@ -49,6 +52,7 @@ type Props = {
 export default function AdminDashboard({
     stats,
     subscriptions,
+    traffic,
     setup,
     revenue,
     utilization,
@@ -69,9 +73,12 @@ export default function AdminDashboard({
 
                 <SubscriptionOverview metrics={subscriptions} />
 
+                <GrowthFunnel traffic={traffic} />
+
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
                     <StatCard
                         label="Booking value this month"
+                        info="Total of all owners' confirmed and completed bookings starting this month. This is the owners' money, not Rentiva's revenue."
                         value={formatPeso(stats.monthRevenue)}
                         icon={Wallet}
                     />
@@ -82,11 +89,13 @@ export default function AdminDashboard({
                     />
                     <StatCard
                         label="Awaiting review"
+                        info="New listings owners submitted that need your approval before renters can see them."
                         value={stats.pendingReview}
                         icon={ClipboardCheck}
                     />
                     <StatCard
                         label="Pending bookings"
+                        info="Requests renters sent that owners haven't answered yet."
                         value={stats.pendingBookings}
                         icon={CalendarClock}
                     />

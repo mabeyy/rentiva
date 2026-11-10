@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Actions\Analytics\BuildTrafficReport;
 use App\Enums\BookingStatus;
 use App\Enums\CarStatus;
 use App\Http\Controllers\Controller;
@@ -14,6 +15,7 @@ use App\Models\Plan;
 use App\Models\Setting;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Rules\Turnstile;
 use Carbon\CarbonImmutable;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -46,6 +48,7 @@ class DashboardController extends Controller
                     ->sum('total'),
             ],
             'subscriptions' => $this->subscriptionMetrics(),
+            'traffic' => app(BuildTrafficReport::class)->forPlatform(),
             'setup' => $this->setupChecklist(),
             'revenue' => $this->dailyRevenue(),
             'utilization' => $this->utilizationByBodyType(),
@@ -153,9 +156,22 @@ class DashboardController extends Controller
         $steps = [
             ['key' => 'plans', 'label' => __('Offer at least one plan'), 'done' => Plan::query()->where('is_active', true)->exists(), 'href' => route('admin.plans.index')],
             ['key' => 'accounts', 'label' => __('Add the accounts owners pay you into'), 'done' => filled(Setting::get(Setting::PlatformBankAccounts)), 'href' => route('admin.billing.index')],
+            ['key' => 'dpo', 'label' => __('Name your Data Protection Officer'), 'done' => filled(Setting::get(Setting::DpoName)) && filled(Setting::get(Setting::DpoEmail)), 'href' => route('admin.settings.edit')],
             ['key' => 'support', 'label' => __('Add your support email and phone'), 'done' => filled(Setting::get(Setting::SupportEmail)) && filled(Setting::get(Setting::SupportPhone)), 'href' => route('admin.settings.edit')],
             ['key' => 'priority', 'label' => __('Add the priority support line'), 'done' => filled(Setting::get(Setting::PriorityPhone)), 'href' => route('admin.settings.edit')],
+            ['key' => 'legal', 'label' => __('Add the registered business name for the privacy notices'), 'done' => filled(Setting::get(Setting::LegalName)), 'href' => route('admin.settings.edit')],
         ];
+
+        // Server settings that fail quietly when missed; set in the host's environment.
+        if (app()->isProduction()) {
+            array_push(
+                $steps,
+                ['key' => 'mail', 'label' => __('Set a real mailer (MAIL_MAILER): emails are only being written to the log'), 'done' => ! in_array(config('mail.default'), ['log', 'array'], true), 'href' => route('admin.settings.edit')],
+                ['key' => 'mail_from', 'label' => __('Set the sender address (MAIL_FROM_ADDRESS)'), 'done' => config('mail.from.address') !== 'hello@example.com', 'href' => route('admin.settings.edit')],
+                ['key' => 'queue', 'label' => __('Use a queue (QUEUE_CONNECTION) and run a worker so emails go out'), 'done' => config('queue.default') !== 'sync', 'href' => route('admin.settings.edit')],
+                ['key' => 'turnstile', 'label' => __('Add the Turnstile keys so booking and sign-up forms are protected from bots'), 'done' => Turnstile::isEnabled(), 'href' => route('admin.settings.edit')],
+            );
+        }
 
         return collect($steps)->every('done') ? null : $steps;
     }

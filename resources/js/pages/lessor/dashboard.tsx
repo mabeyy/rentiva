@@ -1,9 +1,23 @@
 import { Head, Link, usePage } from '@inertiajs/react';
-import { CalendarClock, CarFront, Inbox, Plus, Wallet } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import {
+    ArrowRight,
+    CalendarClock,
+    CarFront,
+    Inbox,
+    Plus,
+    Wallet,
+} from 'lucide-react';
 import type { ReactNode } from 'react';
-import { BookingStatusActions } from '@/components/bookings/booking-status-actions';
-import { BookingsTable } from '@/components/bookings/bookings-table';
-import { EmptyState } from '@/components/empty-state';
+import type { BookingPageTraffic } from '@/components/analytics/booking-page-traffic';
+import { BookingPageTrafficCard } from '@/components/analytics/booking-page-traffic';
+import type { AgendaEvent } from '@/components/lessor/dashboard-lists';
+import {
+    AgendaList,
+    DashboardPanel,
+    RequestList,
+    ToCloseList,
+} from '@/components/lessor/dashboard-lists';
 import { PageHeader } from '@/components/lessor/page-header';
 import { BrandButton } from '@/components/public/brand-button';
 import { StatCard } from '@/components/stat-card';
@@ -15,6 +29,7 @@ import { Button } from '@/components/ui/button';
 import { formatPeso } from '@/lib/format';
 import lessor from '@/routes/lessor';
 import type { Booking, Storefront } from '@/types';
+import type { RouteDefinition } from '@/wayfinder';
 
 type Props = {
     stats: {
@@ -25,52 +40,62 @@ type Props = {
         monthEarnings: number | null;
     };
     pendingBookings: Booking[];
-    upcomingBookings: Booking[];
+    /** Pickups and returns over the next 7 days. */
+    agenda: AgendaEvent[];
+    /** Confirmed trips whose return date has passed. */
+    toClose: Booking[];
     storefront: Storefront | null;
     isSuspended: boolean;
     /** "Good morning" etc., worked out on the server in Philippine time. */
     greeting: string;
     /** Null once setup is done, or for staff. */
     checklist: ChecklistStep[] | null;
+    /** Null until the owner has a booking page. */
+    traffic: BookingPageTraffic | null;
 };
 
-function DashboardSection({
-    title,
-    count,
-    action,
+function ViewAll({
+    href,
+    label = 'View all',
+}: {
+    href: RouteDefinition<'get'>;
+    label?: string;
+}) {
+    return (
+        <Button variant="ghost" size="sm" className="rounded-full" asChild>
+            <Link href={href}>
+                {label} <ArrowRight />
+            </Link>
+        </Button>
+    );
+}
+
+/** A one-line empty state that doesn't take over the column. */
+function QuietNote({
+    icon: Icon,
     children,
 }: {
-    title: string;
-    count: number;
-    action?: ReactNode;
+    icon: LucideIcon;
     children: ReactNode;
 }) {
     return (
-        <section className="space-y-4">
-            <div className="flex items-center justify-between gap-3">
-                <h2 className="flex items-center gap-2 font-display text-xl font-bold tracking-tight">
-                    {title}
-                    {count > 0 && (
-                        <span className="rounded-full bg-brand px-2 py-0.5 text-xs font-semibold text-brand-foreground tabular-nums">
-                            {count}
-                        </span>
-                    )}
-                </h2>
-                {action}
-            </div>
+        <p className="flex items-center gap-3 rounded-2xl border border-dashed px-4 py-5 text-sm text-muted-foreground">
+            <Icon className="size-4 shrink-0" />
             {children}
-        </section>
+        </p>
     );
 }
 
 export default function LessorDashboard({
     stats,
     pendingBookings,
-    upcomingBookings,
+    agenda,
+    toClose,
     storefront,
     isSuspended,
     greeting,
     checklist,
+    traffic,
 }: Props) {
     const { auth } = usePage().props;
     const firstName = auth.user.name.split(' ')[0];
@@ -79,7 +104,7 @@ export default function LessorDashboard({
         <>
             <Head title="Dashboard" />
 
-            <div className="space-y-10 p-4 md:p-8">
+            <div className="mx-auto w-full max-w-7xl space-y-10 p-4 md:p-8">
                 {isSuspended && (
                     <Alert variant="destructive">
                         <AlertTitle>Your account is suspended</AlertTitle>
@@ -91,7 +116,6 @@ export default function LessorDashboard({
                 )}
 
                 <PageHeader
-                    eyebrow="Dashboard"
                     title={
                         <>
                             {greeting},{' '}
@@ -118,14 +142,16 @@ export default function LessorDashboard({
                     }
                 />
 
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
                     <StatCard
+                        dense
                         label="Requests to review"
+                        info="Booking requests renters sent that you haven't confirmed or declined yet. A request you don't answer within 48 hours, or before its pickup time, expires and the dates open up again."
                         value={stats.pendingRequests}
                         icon={Inbox}
                         hint={
                             stats.pendingRequests > 0
-                                ? 'Reply within 24 hours'
+                                ? 'They expire after 48 hours'
                                 : "You're all caught up"
                         }
                         href={lessor.bookings.index({
@@ -134,7 +160,9 @@ export default function LessorDashboard({
                         highlighted={stats.pendingRequests > 0}
                     />
                     <StatCard
+                        dense
                         label="Upcoming trips"
+                        info="Confirmed bookings with a pickup today or later."
                         value={stats.upcomingTrips}
                         icon={CalendarClock}
                         hint="Confirmed and coming up"
@@ -143,7 +171,9 @@ export default function LessorDashboard({
                         })}
                     />
                     <StatCard
+                        dense
                         label="Active listings"
+                        info="Cars live on your booking page. Drafts and cars waiting for review aren't counted."
                         value={stats.activeCars}
                         icon={CarFront}
                         hint="Live on your booking page"
@@ -151,7 +181,9 @@ export default function LessorDashboard({
                     />
                     {stats.monthEarnings !== null && (
                         <StatCard
+                            dense
                             label="Earnings this month"
+                            info="Total of confirmed and completed bookings that start this month. Cancelled and declined bookings aren't counted."
                             value={formatPeso(stats.monthEarnings)}
                             icon={Wallet}
                             hint={`${new Date().toLocaleString('en-PH', { month: 'long' })} so far`}
@@ -161,60 +193,78 @@ export default function LessorDashboard({
 
                 {checklist && <SetupChecklist steps={checklist} />}
 
-                {!isSuspended && <StorefrontLinkCard storefront={storefront} />}
-
-                <DashboardSection
-                    title="Requests waiting for you"
-                    count={pendingBookings.length}
-                    action={
-                        <Button variant="ghost" size="sm" asChild>
-                            <Link
-                                href={lessor.bookings.index({
-                                    query: { status: 'pending' },
-                                })}
-                            >
-                                View all →
-                            </Link>
-                        </Button>
-                    }
-                >
-                    {pendingBookings.length > 0 ? (
-                        <BookingsTable
-                            showPayment
-                            bookings={pendingBookings}
-                            actions={(booking) => (
-                                <BookingStatusActions
-                                    booking={booking}
-                                    compact
-                                />
+                <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-8 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_380px]">
+                    <div className="space-y-8">
+                        <DashboardPanel
+                            title="Requests waiting for you"
+                            count={stats.pendingRequests}
+                            action={
+                                stats.pendingRequests >
+                                    pendingBookings.length && (
+                                    <ViewAll
+                                        href={lessor.bookings.index({
+                                            query: { status: 'pending' },
+                                        })}
+                                    />
+                                )
+                            }
+                        >
+                            {pendingBookings.length > 0 ? (
+                                <RequestList bookings={pendingBookings} />
+                            ) : (
+                                <QuietNote icon={Inbox}>
+                                    You're all caught up. New requests show up
+                                    here.
+                                </QuietNote>
                             )}
-                        />
-                    ) : (
-                        <EmptyState
-                            icon={Inbox}
-                            title="You're all caught up"
-                            description="New booking requests will show up here."
-                        />
-                    )}
-                </DashboardSection>
+                        </DashboardPanel>
 
-                <DashboardSection
-                    title="Upcoming trips"
-                    count={upcomingBookings.length}
-                >
-                    {upcomingBookings.length > 0 ? (
-                        <BookingsTable
-                            showPayment
-                            bookings={upcomingBookings}
-                        />
-                    ) : (
-                        <EmptyState
-                            icon={CalendarClock}
-                            title="No upcoming trips"
-                            description="Confirmed bookings appear here before pickup."
-                        />
-                    )}
-                </DashboardSection>
+                        {toClose.length > 0 && (
+                            <DashboardPanel
+                                title="Trips to close"
+                                count={toClose.length}
+                            >
+                                <p className="-mt-1 text-sm text-muted-foreground">
+                                    These cars are back. Mark each trip
+                                    completed once you've checked the car, so it
+                                    counts in your revenue and the renter can
+                                    leave a review.
+                                </p>
+                                <ToCloseList bookings={toClose} />
+                            </DashboardPanel>
+                        )}
+
+                        <DashboardPanel
+                            title="This week"
+                            action={
+                                <ViewAll
+                                    href={lessor.bookings.calendar()}
+                                    label="Calendar"
+                                />
+                            }
+                        >
+                            {agenda.length > 0 ? (
+                                <AgendaList events={agenda} />
+                            ) : (
+                                <QuietNote icon={CalendarClock}>
+                                    No pickups or returns in the next 7 days.
+                                </QuietNote>
+                            )}
+                        </DashboardPanel>
+                    </div>
+
+                    <aside className="space-y-6 lg:sticky lg:top-6">
+                        {!isSuspended && (
+                            <StorefrontLinkCard
+                                storefront={storefront}
+                                stacked
+                            />
+                        )}
+                        {traffic && (
+                            <BookingPageTrafficCard traffic={traffic} />
+                        )}
+                    </aside>
+                </div>
             </div>
         </>
     );

@@ -6,6 +6,8 @@ use App\Http\Middleware\EnsureStaffCan;
 use App\Http\Middleware\EnsureUserHasRole;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\RecordPageVisit;
+use App\Http\Middleware\ThrottleAccountForms;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -31,6 +33,8 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleAppearance::class,
             HandleInertiaRequests::class,
             BlockAccountChangesWhileImpersonating::class,
+            ThrottleAccountForms::class,
+            RecordPageVisit::class,
             AddLinkHeadersForPreloadedAssets::class,
         ]);
     })
