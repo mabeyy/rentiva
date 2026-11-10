@@ -36,11 +36,12 @@ describe('settings', function () {
         expect($storefront->resend_api_key)->toBe('re_secret123')
             ->and(DB::table('storefronts')->where('id', $storefront->id)->value('resend_api_key'))->not->toContain('re_secret123');
 
-        $this->get(route('admin.lessors.connections.email', $storefront->owner))
+        $this->get(route('admin.lessors.connections.notifications', $storefront->owner))
             ->assertInertia(fn (Assert $page) => $page
-                ->where('settings.has_api_key', true)
-                ->where('settings.mail_from_address', 'bookings@abq.ph')
-                ->missing('settings.resend_api_key'));
+                ->where('email.has_api_key', true)
+                ->where('email.mail_from_address', 'bookings@abq.ph')
+                ->missing('email.resend_api_key')
+                ->where('urls.email_update', route('admin.lessors.connections.email.update', $storefront->owner)));
     });
 
     test('leaving a key blank keeps the saved one', function () {
@@ -63,6 +64,7 @@ describe('settings', function () {
         $this->actingAs(User::factory()->admin()->create())
             ->put(route('admin.lessors.connections.sms.update', $storefront->owner), [
                 'semaphore_api_key' => 'admin-set-key',
+                'sms_sender_name' => 'ABQRENTAL',
                 'sms_enabled' => '1',
             ])
             ->assertSessionHasNoErrors();
@@ -70,11 +72,28 @@ describe('settings', function () {
         expect($storefront->fresh()->semaphore_api_key)->toBe('admin-set-key');
     });
 
+    test('texts can\'t be switched on, tested or sent without an approved sender name', function () {
+        Http::fake();
+        $storefront = Storefront::factory()->onPlan()->create(['semaphore_api_key' => 'sem-key']);
+        $this->actingAs(User::factory()->admin()->create());
+
+        $this->put(route('admin.lessors.connections.sms.update', $storefront->owner), ['sms_enabled' => '1'])
+            ->assertSessionHasErrors(['sms_sender_name' => "Add the business's approved sender name before turning texts on."]);
+        $this->post(route('admin.lessors.connections.sms.test', $storefront->owner), ['test_recipient' => '09171234567'])
+            ->assertSessionHasErrors('sms_sender_name');
+        expect($storefront->fresh()->sms_enabled)->toBeFalse();
+
+        // An older setup switched on without a name stays quiet.
+        $storefront->update(['sms_enabled' => true]);
+        expect(app(SendSms::class)->handle($storefront->fresh(), '09171234567', 'Hello'))->toBeFalse();
+        Http::assertNothingSent();
+    });
+
     test('owners cannot reach another owner\'s connections', function () {
         $storefront = Storefront::factory()->create();
 
         $this->actingAs(Storefront::factory()->create()->owner)
-            ->get(route('admin.lessors.connections.email', $storefront->owner))
+            ->get(route('admin.lessors.connections.notifications', $storefront->owner))
             ->assertForbidden();
     });
 
@@ -105,7 +124,7 @@ describe('sending', function () {
 
     test('confirming a booking texts the renter through the owner\'s Semaphore account', function () {
         Http::fake([SendSms::ENDPOINT => Http::response([['message_id' => 1]])]);
-        $storefront = Storefront::factory()->onPlan()->create(['semaphore_api_key' => 'sem-key', 'sms_enabled' => true]);
+        $storefront = Storefront::factory()->onPlan()->create(['semaphore_api_key' => 'sem-key', 'sms_sender_name' => 'ABQRENTAL', 'sms_enabled' => true]);
         $booking = Booking::factory()->for(Car::factory()->for($storefront->owner, 'owner'))->create(['renter_phone' => '09171234567']);
 
         $this->actingAs($storefront->owner)
@@ -166,15 +185,36 @@ test('the deliveries page lists the owner\'s own emails and texts', function () 
             ->where('deliveries.data.0.summary', 'Your booking is confirmed'));
 });
 
+test('owners see a plain reason for a failed delivery, while admins see the provider\'s reply', function () {
+    $storefront = Storefront::factory()->create();
+    NotificationLog::record(null, 'sms', '09171234567', 'Your booking is confirmed', false, '{"error":"Semaphore: insufficient credits"}', $storefront);
+    NotificationLog::record(null, 'sms', '12345', 'Your booking is confirmed', false, __(SendSms::INVALID_NUMBER), $storefront);
+
+    $this->actingAs($storefront->owner)
+        ->get(route('lessor.connections.deliveries'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('deliveries.data.0.error', SendSms::INVALID_NUMBER)
+            ->where('deliveries.data.1.error', "The text couldn't be delivered. Check the number, or ask Rentiva support for help."));
+
+    $this->actingAs(User::factory()->admin()->create())
+        ->get(route('admin.lessors.connections.deliveries', $storefront->owner))
+        ->assertInertia(fn (Assert $page) => $page->where('deliveries.data.1.error', '{"error":"Semaphore: insufficient credits"}'));
+});
+
 describe('managed by Rentiva', function () {
     test('owners see their email and SMS status but can\'t change them', function () {
         $storefront = Storefront::factory()->create();
         $this->actingAs($storefront->owner);
 
-        $this->get(route('lessor.connections.email'))
-            ->assertInertia(fn (Assert $page) => $page->where('canEdit', false)->where('urls.update', null));
-        $this->get(route('lessor.connections.sms'))
-            ->assertInertia(fn (Assert $page) => $page->where('canEdit', false));
+        $this->get(route('lessor.connections.notifications'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('lessor/connections/notifications')
+                ->where('canEdit', false)
+                ->where('urls.email_update', null)
+                ->where('urls.sms_update', null)
+                ->has('email.reminders')
+                ->has('sms.reminders'));
+        $this->get('/lessor/connections/sms')->assertRedirect(route('lessor.connections.notifications'));
         $this->put('/lessor/connections/sms', ['semaphore_api_key' => 'mine'])->assertMethodNotAllowed();
     });
 

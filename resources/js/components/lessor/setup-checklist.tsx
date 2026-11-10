@@ -2,6 +2,7 @@ import { Link } from '@inertiajs/react';
 import { Check, ChevronRight, X } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
+import { Hint } from '@/components/info-tip';
 
 export type ChecklistStep = {
     key: string;
@@ -53,14 +54,16 @@ export function SetupChecklist({ steps }: { steps: ChecklistStep[] }) {
                         {nextStep && ` · next: ${nextStep.label.toLowerCase()}`}
                     </p>
                 </div>
-                <button
-                    type="button"
-                    aria-label="Hide checklist"
-                    className="rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                    onClick={dismiss}
-                >
-                    <X className="size-4" />
-                </button>
+                <Hint text="Hide checklist">
+                    <button
+                        type="button"
+                        aria-label="Hide checklist"
+                        className="rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        onClick={dismiss}
+                    >
+                        <X className="size-4" />
+                    </button>
+                </Hint>
             </div>
             <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
                 <span

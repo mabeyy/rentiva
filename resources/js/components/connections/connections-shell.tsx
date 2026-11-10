@@ -1,17 +1,11 @@
 import { Link } from '@inertiajs/react';
 import type { LucideIcon } from 'lucide-react';
-import {
-    CalendarDays,
-    Mail,
-    MessageSquare,
-    Send,
-    ShieldAlert,
-} from 'lucide-react';
+import { BellRing, CalendarDays, Send, ShieldAlert } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { PageHeader } from '@/components/lessor/page-header';
 import { cn } from '@/lib/utils';
 
-export type ConnectionPage = 'email' | 'sms' | 'calendar' | 'deliveries';
+export type ConnectionPage = 'notifications' | 'calendar' | 'deliveries';
 
 export type ConnectionContext = {
     page: ConnectionPage;
@@ -28,8 +22,14 @@ export type ConnectionContext = {
     /** Set when an admin is configuring an owner's connections for them. */
     managedOwner: { name: string; business: string | null; url: string } | null;
     urls: Record<ConnectionPage, string> & {
+        /** The calendar's save and test addresses, when it can be edited. */
         update: string | null;
         test: string | null;
+        /** Email and SMS save and test addresses; admins only. */
+        email_update: string | null;
+        email_test: string | null;
+        sms_update: string | null;
+        sms_test: string | null;
         reminders: string;
         /** Null for admins, who don't have the owner's Policies page. */
         policies: string | null;
@@ -39,8 +39,7 @@ export type ConnectionContext = {
 };
 
 const tabs: { key: ConnectionPage; label: string; icon: LucideIcon }[] = [
-    { key: 'email', label: 'Email', icon: Mail },
-    { key: 'sms', label: 'SMS', icon: MessageSquare },
+    { key: 'notifications', label: 'Notifications', icon: BellRing },
     { key: 'calendar', label: 'Google Calendar', icon: CalendarDays },
     { key: 'deliveries', label: 'Deliveries', icon: Send },
 ];
@@ -59,7 +58,7 @@ export function ConnectionsShell({
     children: ReactNode;
 }) {
     return (
-        <div className="mx-auto w-full max-w-4xl space-y-6 p-4 md:p-8">
+        <div className="mx-auto w-full max-w-7xl space-y-6 p-4 md:p-8">
             {context.managedOwner && (
                 <p className="flex flex-wrap items-center gap-2 rounded-2xl border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
                     <ShieldAlert className="size-4 shrink-0" />
@@ -79,7 +78,6 @@ export function ConnectionsShell({
             )}
 
             <PageHeader
-                eyebrow="Connections"
                 title={tabs.find((tab) => tab.key === context.page)!.label}
                 description={description}
             />

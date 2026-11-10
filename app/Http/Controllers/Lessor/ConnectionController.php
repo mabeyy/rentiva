@@ -27,19 +27,40 @@ use Throwable;
  */
 class ConnectionController extends Controller
 {
-    public function email(Request $request, ?User $lessor = null): Response
+    /**
+     * Email and text notifications together: their pickup reminders, and for
+     * admins the setup of each.
+     */
+    public function notifications(Request $request, ?User $lessor = null): Response
     {
         $storefront = $this->storefront($request, $lessor);
 
-        return Inertia::render('lessor/connections/email', [
-            ...$this->context($request, $lessor, 'email'),
-            'settings' => $storefront ? [
+        return Inertia::render('lessor/connections/notifications', [
+            ...$this->context($request, $lessor, 'notifications'),
+            'email' => $storefront ? [
                 'has_api_key' => filled($storefront->resend_api_key),
                 'mail_from_address' => $storefront->mail_from_address,
                 'test_recipient' => $storefront->owner->email,
                 ...$this->reminders($storefront, 'email'),
             ] : null,
+            'sms' => $storefront ? [
+                'has_api_key' => filled($storefront->semaphore_api_key),
+                'sms_sender_name' => $storefront->sms_sender_name,
+                'sms_enabled' => $storefront->sms_enabled,
+                'test_recipient' => $storefront->phone,
+                ...$this->reminders($storefront, 'sms'),
+            ] : null,
         ]);
+    }
+
+    /**
+     * The old separate Email and SMS pages, now part of Notifications.
+     */
+    public function redirectToNotifications(?User $lessor = null): RedirectResponse
+    {
+        return $lessor
+            ? to_route('admin.lessors.connections.notifications', $lessor)
+            : to_route('lessor.connections.notifications');
     }
 
     public function updateEmail(Request $request, ?User $lessor = null): RedirectResponse
@@ -56,7 +77,7 @@ class ConnectionController extends Controller
         $data = $request->validate([
             'resend_api_key' => [Rule::requiredIf(blank($storefront->resend_api_key)), 'nullable', 'string', 'starts_with:re_', 'max:200'],
             'mail_from_address' => ['required', 'email', 'max:255'],
-        ], ['resend_api_key.starts_with' => __('Resend API keys start with "re_".')]);
+        ], ['resend_api_key.starts_with' => __('That API key doesn\'t look right. It should start with "re_".')]);
 
         $storefront->update(array_filter($data, fn (mixed $value): bool => filled($value)));
 
@@ -82,7 +103,7 @@ class ConnectionController extends Controller
         $mailer = app(OwnerMailer::class)->mailerFor($candidate, ignorePlan: true);
 
         if ($mailer === null) {
-            return $this->failed(__('Add your Resend API key first.'));
+            return $this->failed(__('Add the API key first.'));
         }
 
         try {
@@ -96,26 +117,10 @@ class ConnectionController extends Controller
         } catch (Throwable $exception) {
             NotificationLog::record(null, 'mail', $data['test_recipient'], 'Test email', false, $exception->getMessage(), $storefront);
 
-            return $this->failed(__('Resend refused the email. Check the API key and that the sender address is on a verified domain.'));
+            return $this->failed(__('The email couldn\'t be sent. Check the API key and that the sender address is on a verified domain.'));
         }
 
         return $this->saved(__('Test email sent to :to.', ['to' => $data['test_recipient']]));
-    }
-
-    public function sms(Request $request, ?User $lessor = null): Response
-    {
-        $storefront = $this->storefront($request, $lessor);
-
-        return Inertia::render('lessor/connections/sms', [
-            ...$this->context($request, $lessor, 'sms'),
-            'settings' => $storefront ? [
-                'has_api_key' => filled($storefront->semaphore_api_key),
-                'sms_sender_name' => $storefront->sms_sender_name,
-                'sms_enabled' => $storefront->sms_enabled,
-                'test_recipient' => $storefront->phone,
-                ...$this->reminders($storefront, 'sms'),
-            ] : null,
-        ]);
     }
 
     public function updateSms(Request $request, ?User $lessor = null): RedirectResponse
@@ -132,9 +137,13 @@ class ConnectionController extends Controller
         $request->merge(['sms_enabled' => $request->boolean('sms_enabled')]);
         $data = $request->validate([
             'semaphore_api_key' => [Rule::requiredIf(blank($storefront->semaphore_api_key) && $request->boolean('sms_enabled')), 'nullable', 'string', 'max:200'],
-            'sms_sender_name' => ['nullable', 'string', 'max:11', 'alpha_num'],
+            // Without an approved sender name, texts show the provider's name instead of the business's.
+            'sms_sender_name' => ['required_if:sms_enabled,true', 'nullable', 'string', 'max:11', 'alpha_num'],
             'sms_enabled' => ['boolean'],
-        ], ['sms_sender_name.max' => __('Sender names can be at most 11 characters.')]);
+        ], [
+            'sms_sender_name.max' => __('Sender names can be at most 11 characters.'),
+            'sms_sender_name.required_if' => __('Add the business\'s approved sender name before turning texts on.'),
+        ]);
 
         $storefront->update(array_filter($data, fn (mixed $value, string $key): bool => $key !== 'semaphore_api_key' || filled($value), ARRAY_FILTER_USE_BOTH));
 
@@ -147,20 +156,20 @@ class ConnectionController extends Controller
         $storefront = $this->requireStorefront($request, $lessor);
         $data = $request->validate([
             'semaphore_api_key' => ['nullable', 'string', 'max:200'],
-            'sms_sender_name' => ['nullable', 'string', 'max:11'],
+            'sms_sender_name' => ['required', 'string', 'max:11'],
             'test_recipient' => ['required', 'string'],
-        ]);
+        ], ['sms_sender_name.required' => __('Add the approved sender name to send a test.')]);
         $apiKey = $data['semaphore_api_key'] ?: $storefront->semaphore_api_key;
 
         if (blank($apiKey)) {
-            return $this->failed(__('Add your Semaphore API key first.'));
+            return $this->failed(__('Add the API key first.'));
         }
 
-        $sent = app(SendSms::class)->deliver($apiKey, $data['sms_sender_name'] ?? null, $data['test_recipient'], __('Test from :owner on :app: SMS notifications are working.', ['owner' => $storefront->name, 'app' => config('app.name')]), storefront: $storefront);
+        $sent = app(SendSms::class)->deliver($apiKey, $data['sms_sender_name'], $data['test_recipient'], __('Test from :owner on :app: SMS notifications are working.', ['owner' => $storefront->name, 'app' => config('app.name')]), storefront: $storefront);
 
         return $sent
             ? $this->saved(__('Test SMS sent to :to.', ['to' => $data['test_recipient']]))
-            : $this->failed(__('Semaphore refused the text. Check the API key, sender name and phone number.'));
+            : $this->failed(__('The text couldn\'t be sent. Check the API key, sender name and phone number.'));
     }
 
     public function calendar(Request $request, ?User $lessor = null): Response
@@ -272,7 +281,10 @@ class ConnectionController extends Controller
                         'recipient' => $log->recipient,
                         'summary' => $log->summary,
                         'status' => $log->status,
-                        'error' => $log->error,
+                        // The provider's raw reply is for admins; owners get a plain reason.
+                        'error' => $log->error === null || $lessor !== null || $log->error === __(SendSms::INVALID_NUMBER)
+                            ? $log->error
+                            : ($log->channel === 'sms' ? __('The text couldn\'t be delivered. Check the number, or ask Rentiva support for help.') : __('The email couldn\'t be delivered. Check the address, or ask Rentiva support for help.')),
                         'reference' => $log->booking?->reference,
                         'created_at' => $log->created_at?->toIso8601String(),
                     ])
@@ -324,14 +336,17 @@ class ConnectionController extends Controller
             ],
             'managedOwner' => $lessor ? ['name' => $lessor->name, 'business' => $lessor->storefront?->name, 'url' => route('admin.lessors.show', $lessor)] : null,
             'urls' => [
-                'email' => $route('email'),
-                'sms' => $route('sms'),
+                'notifications' => $route('notifications'),
                 'calendar' => $route('calendar'),
                 'deliveries' => $route('deliveries'),
                 'reminders' => $route('reminders.update'),
                 'policies' => $lessor ? null : route('lessor.policies.edit'),
-                'update' => $canEdit && $page !== 'deliveries' ? $route("{$page}.update") : null,
-                'test' => $canEdit && $page !== 'deliveries' ? $route("{$page}.test") : null,
+                'update' => $canEdit && $page === 'calendar' ? $route('calendar.update') : null,
+                'test' => $canEdit && $page === 'calendar' ? $route('calendar.test') : null,
+                'email_update' => $canEdit && $page === 'notifications' ? $route('email.update') : null,
+                'email_test' => $canEdit && $page === 'notifications' ? $route('email.test') : null,
+                'sms_update' => $canEdit && $page === 'notifications' ? $route('sms.update') : null,
+                'sms_test' => $canEdit && $page === 'notifications' ? $route('sms.test') : null,
                 'billing' => $lessor ? null : route('lessor.billing.index'),
             ],
         ];

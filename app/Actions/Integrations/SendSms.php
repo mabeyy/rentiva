@@ -14,6 +14,9 @@ use Throwable;
  */
 class SendSms
 {
+    /** Logged when a number isn't a Philippine mobile; safe to show owners. */
+    public const string INVALID_NUMBER = 'Not a valid Philippine mobile number.';
+
     public const string ENDPOINT = 'https://api.semaphore.co/api/v4/messages';
 
     /**
@@ -21,7 +24,7 @@ class SendSms
      */
     public function handle(Storefront $storefront, string $to, string $message, ?Booking $booking = null): bool
     {
-        if (! $storefront->sms_enabled || blank($storefront->semaphore_api_key) || ! $storefront->owner->planIncludes('sms')) {
+        if (! $storefront->sms_enabled || blank($storefront->semaphore_api_key) || blank($storefront->sms_sender_name) || ! $storefront->owner->planIncludes('sms')) {
             return false;
         }
 
@@ -36,7 +39,7 @@ class SendSms
         $number = self::normalize($to);
 
         if ($number === null) {
-            NotificationLog::record($booking, 'sms', $to, $message, false, __('Not a valid Philippine mobile number.'), $storefront);
+            NotificationLog::record($booking, 'sms', $to, $message, false, __(self::INVALID_NUMBER), $storefront);
 
             return false;
         }
