@@ -47,3 +47,26 @@ export function formatFuelEconomy(
 
     return `${city ?? '–'} / ${highway ?? '–'} km/L`;
 }
+
+const manilaDateTimeFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Manila',
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+});
+
+/**
+ * Format a timestamp in Philippine time, e.g. "Mon, Nov 9 · 3:30 PM", so the
+ * server render and every visitor's browser show the same moment.
+ */
+export function formatManilaDateTime(timestamp: string): string {
+    const parts = Object.fromEntries(
+        manilaDateTimeFormatter
+            .formatToParts(new Date(timestamp))
+            .map((part) => [part.type, part.value]),
+    );
+
+    return `${parts.weekday}, ${parts.month} ${parts.day} · ${parts.hour}:${parts.minute} ${parts.dayPeriod}`;
+}

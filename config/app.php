@@ -78,7 +78,9 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    // Rentiva runs in the Philippines: "today", due dates, booking rules and the
+    // scheduler all follow Manila time.
+    'timezone' => 'Asia/Manila',
 
     /*
     |--------------------------------------------------------------------------
