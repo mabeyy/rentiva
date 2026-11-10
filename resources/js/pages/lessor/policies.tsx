@@ -5,14 +5,17 @@ import PolicyController from '@/actions/App/Http/Controllers/Lessor/PolicyContro
 import { EmptyState } from '@/components/empty-state';
 import { FormField } from '@/components/form-field';
 import { FormSaveBar } from '@/components/form-save-bar';
+import InputError from '@/components/input-error';
+import { AmountInput, ExtrasFields } from '@/components/lessor/extras-fields';
 import { FormSection } from '@/components/lessor/form-section';
 import { PageHeader } from '@/components/lessor/page-header';
-import { OptionSelect } from '@/components/option-select';
+import { SectionNav } from '@/components/lessor/section-nav';
 import { BrandButton } from '@/components/public/brand-button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { UnitInput } from '@/components/unit-input';
 import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
 import { privacy } from '@/routes';
 import lessor from '@/routes/lessor';
 import type { Option } from '@/types';
@@ -27,16 +30,38 @@ type Policies = {
     min_rental_days: number;
     advance_notice_hours: number;
     max_advance_days: number;
+    default_weekly_discount: number;
+    default_monthly_discount: number;
+    /** Pesos; null when not offered. */
+    default_delivery_fee: string | null;
+    default_driver_daily_rate: string | null;
+    default_deposit_percent: number;
+    /** Pesos; null when not set. */
+    damage_participation_fee: string | null;
+    damage_policy: string | null;
+    /** Cars with their own discounts and extras, which these don't change. */
+    cars_with_own_extras: number;
 };
+
+/** Pesos from the server to centavos for the fields; null stays "not offered". */
+function centavos(pesos: string | null): number | null {
+    return pesos === null ? null : Math.round(Number(pesos) * 100);
+}
+
+const policySections = [
+    { id: 'booking-rules', label: 'Booking rules' },
+    { id: 'cancellations', label: 'Cancellations & terms' },
+    { id: 'prices', label: 'Discounts, deposit & extras' },
+    { id: 'damage', label: 'Damage' },
+] as const;
 
 const cancellationExplanations: Record<
     Policies['renter_cancellation'],
     string
 > = {
-    anytime:
-        'Renters can cancel a confirmed booking from their booking link any time before pickup.',
-    notice: 'Renters can cancel from their booking link until the cutoff below. After that they have to call or message you.',
-    never: 'Renters can only view their booking. To change or cancel it they have to call or message you.',
+    anytime: 'From their booking link, any time before pickup.',
+    notice: 'From their booking link until a cutoff you set. After that they contact you.',
+    never: 'They can view their booking, but have to call or message you to cancel.',
 };
 
 export default function LessorPolicies({
@@ -55,34 +80,33 @@ export default function LessorPolicies({
         <>
             <Head title="Policies" />
 
-            <div className="mx-auto w-full max-w-4xl space-y-8 p-4 md:p-8">
+            <div className="mx-auto w-full max-w-7xl space-y-6 p-4 md:p-8">
                 <PageHeader
-                    eyebrow="Your rules"
                     title="Policies"
                     description="Decide when renters pick up, what they can do themselves, and what they agree to when booking."
                 />
 
                 {policies ? (
-                    <Form
-                        {...PolicyController.update.form()}
-                        options={{ preserveScroll: true }}
-                        className="space-y-6"
-                    >
-                        {({ processing, errors }) => (
-                            <>
-                                <FormSection
-                                    step={1}
-                                    title="Booking policy"
-                                    description="When renters usually pick up, and whether they can cancel their own booking from the link we email them."
-                                >
-                                    <div className="space-y-4">
-                                        <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start">
+                    <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-[minmax(0,1fr)_240px]">
+                        <Form
+                            {...PolicyController.update.form()}
+                            options={{ preserveScroll: true }}
+                            className="space-y-6"
+                        >
+                            {({ processing, errors }) => (
+                                <>
+                                    <FormSection
+                                        id="booking-rules"
+                                        title="Booking rules"
+                                        description="When renters pick up, and how short or far ahead they can book."
+                                    >
+                                        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
                                             <FormField
                                                 id="pickup_time"
                                                 label="Usual pickup time"
+                                                info="Shown to renters and used to time pickup reminders. A renter can still agree a different time with you."
                                                 error={errors.pickup_time}
                                                 hint="Philippine time."
-                                                className="sm:w-36"
                                             >
                                                 <Input
                                                     id="pickup_time"
@@ -95,75 +119,10 @@ export default function LessorPolicies({
                                                 />
                                             </FormField>
                                             <FormField
-                                                id="renter_cancellation"
-                                                label="Can renters cancel their own booking?"
-                                                error={
-                                                    errors.renter_cancellation
-                                                }
-                                            >
-                                                <OptionSelect
-                                                    id="renter_cancellation"
-                                                    name="renter_cancellation"
-                                                    options={
-                                                        cancellationOptions
-                                                    }
-                                                    defaultValue={cancellation}
-                                                    onChange={(value) =>
-                                                        value &&
-                                                        setCancellation(
-                                                            value as Policies['renter_cancellation'],
-                                                        )
-                                                    }
-                                                    className="sm:w-72"
-                                                />
-                                            </FormField>
-
-                                            {cancellation === 'notice' && (
-                                                <FormField
-                                                    id="cancellation_notice_hours"
-                                                    label="Until this long before pickup"
-                                                    error={
-                                                        errors.cancellation_notice_hours
-                                                    }
-                                                >
-                                                    <div className="relative w-36">
-                                                        <Input
-                                                            id="cancellation_notice_hours"
-                                                            name="cancellation_notice_hours"
-                                                            type="number"
-                                                            inputMode="numeric"
-                                                            min={1}
-                                                            max={336}
-                                                            defaultValue={
-                                                                policies.cancellation_notice_hours
-                                                            }
-                                                            className="pr-16 tabular-nums"
-                                                        />
-                                                        <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground">
-                                                            hours
-                                                        </span>
-                                                    </div>
-                                                </FormField>
-                                            )}
-                                        </div>
-
-                                        <p className="flex gap-2 rounded-2xl bg-muted/50 p-4 text-sm text-muted-foreground">
-                                            <Info className="mt-0.5 size-4 shrink-0" />
-                                            <span>
-                                                {
-                                                    cancellationExplanations[
-                                                        cancellation
-                                                    ]
-                                                }{' '}
-                                                Requests you haven't confirmed
-                                                yet can always be withdrawn.
-                                            </span>
-                                        </p>
-
-                                        <div className="grid gap-4 rounded-2xl border p-4 sm:grid-cols-3">
-                                            <FormField
                                                 id="min_rental_days"
                                                 label="Shortest rental"
+                                                hint="Per booking."
+                                                info="Renters can't request fewer days than this. Bookings you add yourself aren't limited."
                                                 error={errors.min_rental_days}
                                             >
                                                 <UnitInput
@@ -180,6 +139,7 @@ export default function LessorPolicies({
                                             <FormField
                                                 id="advance_notice_hours"
                                                 label="Book at least"
+                                                info="How much notice you need before a pickup. With 24 hours, a renter can't book a pickup for later today."
                                                 error={
                                                     errors.advance_notice_hours
                                                 }
@@ -199,6 +159,7 @@ export default function LessorPolicies({
                                             <FormField
                                                 id="max_advance_days"
                                                 label="Book up to"
+                                                info="How far ahead renters can book. Later dates are greyed out on your booking page."
                                                 error={errors.max_advance_days}
                                                 hint="Days ahead."
                                             >
@@ -215,7 +176,7 @@ export default function LessorPolicies({
                                             </FormField>
                                         </div>
 
-                                        <label className="flex cursor-pointer items-start justify-between gap-4 rounded-2xl border p-4">
+                                        <label className="mt-6 flex cursor-pointer items-start justify-between gap-4 border-t pt-5">
                                             <span>
                                                 <span className="block text-sm font-medium">
                                                     Require a photo of the
@@ -237,63 +198,241 @@ export default function LessorPolicies({
                                                 className="data-[state=checked]:bg-brand"
                                             />
                                         </label>
-                                    </div>
-                                </FormSection>
+                                    </FormSection>
 
-                                <FormSection
-                                    step={2}
-                                    title="Payment & cancellation policy"
-                                    description="Shown when renters book, whichever way they pay. They tick to agree before sending the request."
-                                >
-                                    <FormField
-                                        id="payment_policy"
-                                        label="Your policy"
-                                        error={errors.payment_policy}
+                                    <FormSection
+                                        id="cancellations"
+                                        title="Cancellations & payment terms"
+                                        description="Whether renters can cancel from the link we email them, and the terms they agree to when booking."
                                     >
-                                        <Textarea
-                                            id="payment_policy"
-                                            name="payment_policy"
-                                            rows={5}
-                                            defaultValue={
-                                                policies.payment_policy ?? ''
-                                            }
-                                            placeholder="e.g. Free cancellation up to 24 hours before pickup. A ₱1,000 security deposit is collected at pickup and returned with the car."
-                                        />
-                                    </FormField>
-                                </FormSection>
+                                        <fieldset className="space-y-2">
+                                            <legend className="mb-2 text-sm font-medium">
+                                                Can renters cancel their own
+                                                booking?
+                                            </legend>
+                                            <div className="grid gap-2 md:grid-cols-3">
+                                                {cancellationOptions.map(
+                                                    (option) => {
+                                                        const value =
+                                                            option.value as Policies['renter_cancellation'];
+                                                        const isChosen =
+                                                            cancellation ===
+                                                            value;
 
-                                <p className="flex gap-3 rounded-3xl border border-dashed p-5 text-sm text-muted-foreground sm:px-8">
-                                    <ShieldCheck className="mt-0.5 size-4 shrink-0 text-brand" />
-                                    <span>
-                                        Renter details are kept for{' '}
-                                        <strong className="font-semibold text-foreground">
+                                                        return (
+                                                            <label
+                                                                key={value}
+                                                                className={cn(
+                                                                    'flex cursor-pointer flex-col gap-1 rounded-2xl border p-4 transition-colors hover:border-foreground/30 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring/50',
+                                                                    isChosen &&
+                                                                        'border-brand/60 bg-brand/5 hover:border-brand/60',
+                                                                )}
+                                                            >
+                                                                <span className="flex items-center gap-2 text-sm font-medium">
+                                                                    <input
+                                                                        type="radio"
+                                                                        name="renter_cancellation"
+                                                                        value={
+                                                                            value
+                                                                        }
+                                                                        checked={
+                                                                            isChosen
+                                                                        }
+                                                                        onChange={() =>
+                                                                            setCancellation(
+                                                                                value,
+                                                                            )
+                                                                        }
+                                                                        className="size-4 accent-brand"
+                                                                    />
+                                                                    {
+                                                                        option.label
+                                                                    }
+                                                                </span>
+                                                                <span className="pl-6 text-xs text-muted-foreground">
+                                                                    {
+                                                                        cancellationExplanations[
+                                                                            value
+                                                                        ]
+                                                                    }
+                                                                </span>
+                                                            </label>
+                                                        );
+                                                    },
+                                                )}
+                                            </div>
+                                            <InputError
+                                                message={
+                                                    errors.renter_cancellation
+                                                }
+                                            />
+                                        </fieldset>
+
+                                        {cancellation === 'notice' && (
+                                            <FormField
+                                                id="cancellation_notice_hours"
+                                                label="Renters can cancel until"
+                                                error={
+                                                    errors.cancellation_notice_hours
+                                                }
+                                                hint="Before pickup. After that they have to call or message you."
+                                                className="mt-5"
+                                            >
+                                                <UnitInput
+                                                    id="cancellation_notice_hours"
+                                                    name="cancellation_notice_hours"
+                                                    defaultValue={
+                                                        policies.cancellation_notice_hours
+                                                    }
+                                                    unit="hours"
+                                                    min={1}
+                                                    max={336}
+                                                />
+                                            </FormField>
+                                        )}
+                                        <p className="mt-3 text-xs text-muted-foreground">
+                                            Requests you haven't confirmed yet
+                                            can always be withdrawn.
+                                        </p>
+
+                                        <FormField
+                                            id="payment_policy"
+                                            label="Payment & cancellation terms"
+                                            info="Shown when renters book, whichever way they pay. They tick to agree before sending the request."
+                                            error={errors.payment_policy}
+                                            hint="Renters tick to agree to this before sending a request."
+                                            className="mt-6 border-t pt-5"
+                                        >
+                                            <Textarea
+                                                id="payment_policy"
+                                                name="payment_policy"
+                                                rows={4}
+                                                defaultValue={
+                                                    policies.payment_policy ??
+                                                    ''
+                                                }
+                                                placeholder="e.g. Free cancellation up to 24 hours before pickup. Late returns are charged ₱300 per hour."
+                                            />
+                                        </FormField>
+                                    </FormSection>
+
+                                    <FormSection
+                                        id="prices"
+                                        title="Discounts, deposit & extras"
+                                        description="Set once for every car. A car can still have its own, from its edit page."
+                                    >
+                                        <ExtrasFields
+                                            prefix="default_"
+                                            errors={errors}
+                                            values={{
+                                                weekly_discount:
+                                                    policies.default_weekly_discount,
+                                                monthly_discount:
+                                                    policies.default_monthly_discount,
+                                                deposit_percent:
+                                                    policies.default_deposit_percent,
+                                                delivery_fee: centavos(
+                                                    policies.default_delivery_fee,
+                                                ),
+                                                driver_daily_rate: centavos(
+                                                    policies.default_driver_daily_rate,
+                                                ),
+                                            }}
+                                        />
+                                        {policies.cars_with_own_extras > 0 && (
+                                            <p className="mt-5 flex gap-2 text-xs text-muted-foreground">
+                                                <Info className="size-4 shrink-0" />
+                                                <span>
+                                                    {policies.cars_with_own_extras ===
+                                                    1
+                                                        ? '1 car has its own discounts and extras, so it won’t change.'
+                                                        : `${policies.cars_with_own_extras} cars have their own discounts and extras, so they won’t change.`}{' '}
+                                                    Every other car updates when
+                                                    you save.
+                                                </span>
+                                            </p>
+                                        )}
+                                    </FormSection>
+
+                                    <FormSection
+                                        id="damage"
+                                        title="If the car is damaged"
+                                        description="Optional. Renters agree to this when they book, and it's printed on the rental agreement."
+                                    >
+                                        <div className="grid gap-5 lg:grid-cols-[14rem_minmax(0,1fr)]">
+                                            <FormField
+                                                id="damage_participation_fee"
+                                                label="Renter pays first"
+                                                error={
+                                                    errors.damage_participation_fee
+                                                }
+                                                hint="Leave blank if you don't charge one."
+                                                info="Like an insurance participation fee: the renter covers this amount of any damage, and your insurance or deposit covers the rest. Common amounts are ₱3,000 to ₱5,000."
+                                            >
+                                                <AmountInput
+                                                    id="damage_participation_fee"
+                                                    unit="₱"
+                                                    step={500}
+                                                    defaultValue={
+                                                        policies.damage_participation_fee ??
+                                                        ''
+                                                    }
+                                                    placeholder="None"
+                                                />
+                                            </FormField>
+                                            <FormField
+                                                id="damage_policy"
+                                                label="Damage terms"
+                                                error={errors.damage_policy}
+                                                hint="Optional."
+                                            >
+                                                <Textarea
+                                                    id="damage_policy"
+                                                    name="damage_policy"
+                                                    rows={3}
+                                                    maxLength={1000}
+                                                    defaultValue={
+                                                        policies.damage_policy ??
+                                                        ''
+                                                    }
+                                                    placeholder="e.g. The renter also pays for damage our insurance doesn't cover, and for the days the car is in the shop."
+                                                />
+                                            </FormField>
+                                        </div>
+                                    </FormSection>
+
+                                    <p className="flex gap-2 px-1 text-xs text-muted-foreground">
+                                        <ShieldCheck className="size-4 shrink-0 text-brand" />
+                                        <span>
+                                            Renter details are kept for{' '}
                                             {policies.data_retention_months}{' '}
                                             {policies.data_retention_months ===
                                             1
                                                 ? 'month'
-                                                : 'months'}
-                                        </strong>{' '}
-                                        after each trip, then removed
-                                        automatically. Rentiva sets this under
-                                        its{' '}
-                                        <Link
-                                            href={privacy()}
-                                            className="font-medium text-foreground underline underline-offset-4"
-                                        >
-                                            privacy policy
-                                        </Link>
-                                        .
-                                    </span>
-                                </p>
+                                                : 'months'}{' '}
+                                            after each trip, then removed
+                                            automatically, as set in Rentiva's{' '}
+                                            <Link
+                                                href={privacy()}
+                                                className="font-medium text-foreground underline underline-offset-4"
+                                            >
+                                                privacy policy
+                                            </Link>
+                                            .
+                                        </span>
+                                    </p>
 
-                                <FormSaveBar
-                                    label="Save policies"
-                                    hint="Applies to bookings right away."
-                                    processing={processing}
-                                />
-                            </>
-                        )}
-                    </Form>
+                                    <FormSaveBar
+                                        label="Save policies"
+                                        hint="Applies to bookings right away."
+                                        processing={processing}
+                                    />
+                                </>
+                            )}
+                        </Form>
+
+                        <SectionNav sections={policySections} />
+                    </div>
                 ) : (
                     <EmptyState
                         icon={Store}

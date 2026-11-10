@@ -33,7 +33,7 @@ class PriceBooking
         $subtotal = 0;
 
         for ($day = CarbonImmutable::parse($startDate)->startOfDay(); $day->lt(CarbonImmutable::parse($endDate)->startOfDay()); $day = $day->addDay()) {
-            $rateChange = $seasons->first(fn (PeakSeason $season): bool => $season->covers($day))?->rate_change ?? 0;
+            $rateChange = $seasons->first(fn (PeakSeason $season): bool => $season->covers($day))->rate_change ?? 0;
             $subtotal += (int) round($car->daily_rate * (100 + $rateChange) / 100);
         }
 
@@ -53,7 +53,16 @@ class PriceBooking
             'delivery_fee' => $deliveryFee,
             'driver_fee' => $driverFee,
             'total' => $subtotal - $discount + $deliveryFee + $driverFee,
-            'security_deposit' => $car->security_deposit,
+            'security_deposit' => self::deposit($subtotal - $discount, $car->deposit_percent),
         ];
+    }
+
+    /**
+     * The security deposit: a percent of the rental (before delivery and
+     * driver fees), rounded to the nearest peso.
+     */
+    public static function deposit(int $rental, int $percent): int
+    {
+        return (int) round($rental * $percent / 100 / 100) * 100;
     }
 }

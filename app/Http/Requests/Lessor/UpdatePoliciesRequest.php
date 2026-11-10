@@ -36,11 +36,18 @@ class UpdatePoliciesRequest extends FormRequest
             'renter_cancellation' => ['required', Rule::enum(RenterCancellation::class)],
             'cancellation_notice_hours' => ['required_if:renter_cancellation,notice', 'nullable', 'integer', 'between:1,336'],
             'payment_policy' => ['nullable', 'string', 'max:2000'],
+            'damage_participation_fee' => ['sometimes', 'nullable', 'numeric', 'between:0,200000'],
+            'damage_policy' => ['sometimes', 'nullable', 'string', 'max:1000'],
             'pickup_time' => ['sometimes', 'date_format:H:i'],
             'requires_license_photo' => ['boolean'],
             'min_rental_days' => ['sometimes', 'integer', 'between:1,30'],
             'advance_notice_hours' => ['sometimes', 'integer', 'between:0,168'],
             'max_advance_days' => ['sometimes', 'integer', 'between:7,730'],
+            'default_weekly_discount' => ['sometimes', 'nullable', 'integer', 'between:0,50'],
+            'default_monthly_discount' => ['sometimes', 'nullable', 'integer', 'between:0,70'],
+            'default_delivery_fee' => ['sometimes', 'nullable', 'numeric', 'between:0,20000'],
+            'default_driver_daily_rate' => ['sometimes', 'nullable', 'numeric', 'between:0,20000'],
+            'default_deposit_percent' => ['sometimes', 'nullable', 'integer', 'between:0,100'],
         ];
     }
 

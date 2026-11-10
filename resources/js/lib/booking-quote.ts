@@ -44,7 +44,7 @@ export function calculateBookingQuote(
         | 'monthly_discount'
         | 'delivery_fee'
         | 'driver_daily_rate'
-        | 'security_deposit'
+        | 'deposit_percent'
     >,
     range: DateRange | undefined,
     extras: {
@@ -100,8 +100,16 @@ export function calculateBookingQuote(
         deliveryFee,
         driverFee,
         total: subtotal - discount + deliveryFee + driverFee,
-        securityDeposit: car.security_deposit,
+        securityDeposit: depositFor(subtotal - discount, car.deposit_percent),
     };
+}
+
+/**
+ * The security deposit: a percent of the rental (before delivery and driver
+ * fees), rounded to the nearest peso, matching PriceBooking::deposit().
+ */
+export function depositFor(rental: number, percent: number): number {
+    return Math.round((rental * percent) / 100 / 100) * 100;
 }
 
 /** The breakdown a booking was saved with. */
@@ -127,6 +135,9 @@ export function quoteFromBooking(booking: Booking): BookingQuote {
  * pick up, and the shortest rental. The first day is the first whose pickup
  * time is far enough away.
  */
+/** Longest booking, matching StoreBookingRequest::MAX_DAYS on the server. */
+export const MAX_BOOKING_DAYS = 30;
+
 export function bookingWindow(rules: {
     min_days: number;
     notice_hours: number;
