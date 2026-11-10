@@ -1,10 +1,10 @@
 import { Search } from 'lucide-react';
-import { useState } from 'react';
 import { Input } from '@/components/ui/input';
+import { useDebouncedSearch } from '@/hooks/use-debounced-search';
 import { cn } from '@/lib/utils';
 
 /**
- * Search box that applies on Enter or blur, not on every keystroke.
+ * Search box that updates results as you type, a moment after you stop.
  */
 export function SearchInput({
     value,
@@ -17,22 +17,19 @@ export function SearchInput({
     placeholder?: string;
     className?: string;
 }) {
-    const [search, setSearch] = useState(value ?? '');
+    const [search, setSearch] = useDebouncedSearch(value, onSearch);
 
     return (
         <form
             role="search"
             className={cn('relative w-full max-w-sm', className)}
-            onSubmit={(event) => {
-                event.preventDefault();
-                onSearch(search);
-            }}
+            onSubmit={(event) => event.preventDefault()}
         >
             <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
+                type="search"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                onBlur={() => search !== (value ?? '') && onSearch(search)}
                 placeholder={placeholder}
                 className="pl-9"
             />

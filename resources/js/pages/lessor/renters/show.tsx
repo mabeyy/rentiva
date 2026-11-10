@@ -31,9 +31,8 @@ export default function LessorRenterShow({
         <>
             <Head title={renter.name} />
 
-            <div className="space-y-6 p-4 md:p-8">
+            <div className="mx-auto w-full max-w-7xl space-y-6 p-4 md:p-8">
                 <PageHeader
-                    eyebrow="Renter"
                     title={renter.name}
                     description={`${bookings.length} ${bookings.length === 1 ? 'booking' : 'bookings'} with you · ${formatPeso(renter.total_spent)} spent`}
                     actions={

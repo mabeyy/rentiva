@@ -12,6 +12,10 @@ import type { Option } from '@/types';
 
 const ANY_VALUE = '__any__';
 
+/** The chosen option is shown in bold rather than with a dot. */
+const selectedClass =
+    'pl-2 data-[state=checked]:font-semibold [&>span:first-child]:hidden';
+
 /**
  * Dropdown for a list of value/label options. Pass `anyLabel` to allow
  * clearing the value, and `name` to submit it with a native/Inertia form.
@@ -81,7 +85,10 @@ export function OptionSelect({
                     onValueChange={select}
                 >
                     {anyLabel && (
-                        <DropdownMenuRadioItem value={ANY_VALUE}>
+                        <DropdownMenuRadioItem
+                            value={ANY_VALUE}
+                            className={selectedClass}
+                        >
                             {anyLabel}
                         </DropdownMenuRadioItem>
                     )}
@@ -89,6 +96,7 @@ export function OptionSelect({
                         <DropdownMenuRadioItem
                             key={option.value}
                             value={option.value}
+                            className={selectedClass}
                         >
                             {option.label}
                         </DropdownMenuRadioItem>

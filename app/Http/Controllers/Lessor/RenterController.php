@@ -8,11 +8,11 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\BookingResource;
 use App\Models\Booking;
 use App\Models\RenterFlag;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -31,14 +31,21 @@ class RenterController extends Controller
         $search = mb_strtolower($filters['search'] ?? '');
         $renters = $groupRenters->handle($request->user());
 
-        $matching = $renters
-            ->when($search !== '', fn (Collection $all) => $all->filter(fn (array $renter): bool => $renter['bookings']->contains(
+        $matching = $renters;
+
+        if ($search !== '') {
+            $matching = $matching->filter(fn (array $renter): bool => $renter['bookings']->contains(
                 fn (Booking $booking): bool => str_contains(mb_strtolower($booking->renter_name), $search)
                     || str_contains($booking->renter_phone_key, preg_replace('/\D/', '', $search) ?: '#')
                     || str_contains(mb_strtolower((string) $booking->renter_email), $search),
-            )))
-            ->when($filters['flagged'] ?? false, fn (Collection $all) => $all->filter(fn (array $renter): bool => $renter['flag'] !== null))
-            ->values();
+            ));
+        }
+
+        if ($filters['flagged'] ?? false) {
+            $matching = $matching->filter(fn (array $renter): bool => $renter['flag'] !== null);
+        }
+
+        $matching = $matching->values();
 
         $page = LengthAwarePaginator::resolveCurrentPage();
         $paginator = (new LengthAwarePaginator(
@@ -108,7 +115,7 @@ class RenterController extends Controller
     /**
      * A renter's row in the list.
      *
-     * @param  array{key: string, phone_keys: array<int, string>, emails: array<int, string>, bookings: Collection<int, Booking>, flag: string|null}  $renter
+     * @param  array{key: string, phone_keys: array<int, string>, emails: array<int, string>, bookings: EloquentCollection<int, Booking>, flag: string|null}  $renter
      * @return array<string, mixed>
      */
     private function summary(array $renter): array

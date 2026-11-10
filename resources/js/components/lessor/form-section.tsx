@@ -6,12 +6,15 @@ import { cn } from '@/lib/utils';
  * landing page's setup steps.
  */
 export function FormSection({
+    id,
     step,
     title,
     description,
     className,
     children,
 }: {
+    /** Anchor for in-page links, e.g. the edit page's section menu. */
+    id?: string;
     step?: number;
     title: string;
     description: string;
@@ -20,8 +23,9 @@ export function FormSection({
 }) {
     return (
         <section
+            id={id}
             className={cn(
-                'rounded-3xl border bg-background p-5 sm:p-8',
+                'scroll-mt-6 rounded-3xl border bg-background p-5 sm:p-8',
                 className,
             )}
         >

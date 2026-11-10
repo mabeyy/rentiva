@@ -26,29 +26,10 @@ export type BillingCycle = 'monthly' | 'yearly';
 const included = [
     'Your own booking page and link',
     'Unlimited bookings, no commission',
-    'Booking confirmations to renters by email',
+    'Every booking and payment email to renters',
     "Driver's license photo checks",
     'Calendar, renters and reviews',
     'Receipts, agreements and CSV exports',
-];
-
-const questions = [
-    {
-        question: 'Do you take a cut of my bookings?',
-        answer: 'No. Renters pay you directly, at pickup or by bank transfer. You only pay your plan.',
-    },
-    {
-        question: 'How do I pay?',
-        answer: 'We send an invoice each month, or once a year on yearly billing. Pay by bank transfer or e-wallet and upload the receipt in your dashboard.',
-    },
-    {
-        question: 'Do texts cost extra?',
-        answer: 'Texts go through your own Semaphore account, so you buy credits from Semaphore directly (about ₱0.50 a text). We connect it for you. Emails are included.',
-    },
-    {
-        question: 'Can I change plans later?',
-        answer: 'Anytime, from Billing. The new price starts with your next invoice.',
-    },
 ];
 
 /** "₱1,499" without the centavos. */
@@ -173,7 +154,7 @@ export function PricingSection({ plans }: { plans: PublicPlan[] }) {
     const featuredIndex = plans.length >= 3 ? Math.floor(plans.length / 2) : -1;
 
     return (
-        <section id="pricing" className="scroll-mt-20 border-t bg-muted/30">
+        <section id="pricing" className="scroll-mt-20 bg-background">
             <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6">
                 <div className="mx-auto max-w-2xl text-center">
                     <p className="text-sm font-semibold tracking-widest text-muted-foreground uppercase">
@@ -287,7 +268,7 @@ export function PricingSection({ plans }: { plans: PublicPlan[] }) {
                     })}
                 </div>
 
-                <div className="mx-auto mt-10 max-w-5xl rounded-3xl border bg-background px-6 py-5">
+                <div className="mx-auto mt-10 max-w-5xl rounded-3xl bg-muted/40 px-6 py-5">
                     <p className="text-center text-sm font-semibold">
                         Every plan includes
                     </p>
@@ -303,17 +284,6 @@ export function PricingSection({ plans }: { plans: PublicPlan[] }) {
                         ))}
                     </ul>
                 </div>
-
-                <dl className="mx-auto mt-16 grid max-w-5xl gap-8 sm:grid-cols-2">
-                    {questions.map(({ question, answer }) => (
-                        <div key={question}>
-                            <dt className="font-semibold">{question}</dt>
-                            <dd className="mt-1.5 text-sm text-muted-foreground">
-                                {answer}
-                            </dd>
-                        </div>
-                    ))}
-                </dl>
             </div>
         </section>
     );

@@ -50,8 +50,12 @@ export function brandColorStyle(
         return undefined;
     }
 
+    // The theme's --color-brand is resolved where it's declared (the root),
+    // so it's set here too for the override to work inside any element.
     return {
         '--brand': hex,
         '--brand-foreground': readableTextOn(hex),
+        '--color-brand': hex,
+        '--color-brand-foreground': readableTextOn(hex),
     } as CSSProperties;
 }

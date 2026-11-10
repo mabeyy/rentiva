@@ -1,5 +1,12 @@
 import { Head, router, useForm } from '@inertiajs/react';
-import { format, parseISO } from 'date-fns';
+import {
+    addDays,
+    differenceInCalendarDays,
+    format,
+    max,
+    parseISO,
+    startOfDay,
+} from 'date-fns';
 import { Pencil, Plus, Sun, Trash2 } from 'lucide-react';
 import type { FormEvent } from 'react';
 import { useState } from 'react';
@@ -23,6 +30,14 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
 import { toIsoDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import lessor from '@/routes/lessor';
@@ -35,12 +50,95 @@ type Season = {
     rate_change: number;
 };
 
-const suggestions = [
-    { name: 'Christmas & New Year', rate_change: 30 },
-    { name: 'Holy Week', rate_change: 25 },
-    { name: 'Summer', rate_change: 15 },
-    { name: 'Rainy season', rate_change: -10 },
+type Suggestion = {
+    name: string;
+    /** A shorter name for the suggestion pill. */
+    label: string;
+    rate_change: number;
+    /** The season's days in a given year; it may end in the next year. */
+    datesIn: (year: number) => { from: Date; to: Date };
+};
+
+/** Easter Sunday in the given year (anonymous Gregorian algorithm). */
+function easterSunday(year: number): Date {
+    const a = year % 19;
+    const b = Math.floor(year / 100);
+    const c = year % 100;
+    const d = Math.floor(b / 4);
+    const e = b % 4;
+    const f = Math.floor((b + 8) / 25);
+    const g = Math.floor((b - f + 1) / 3);
+    const h = (19 * a + b - d - g + 15) % 30;
+    const i = Math.floor(c / 4);
+    const k = c % 4;
+    const l = (32 + 2 * e + 2 * i - h - k) % 7;
+    const m = Math.floor((a + 11 * h + 22 * l) / 451);
+    const month = Math.floor((h + l - 7 * m + 114) / 31);
+    const day = ((h + l - 7 * m + 114) % 31) + 1;
+
+    return new Date(year, month - 1, day);
+}
+
+/** The busy and quiet stretches most Philippine rental owners price for. */
+const suggestions: Suggestion[] = [
+    {
+        name: 'Christmas & New Year',
+        label: 'Christmas',
+        rate_change: 30,
+        datesIn: (year) => ({
+            from: new Date(year, 11, 20),
+            to: new Date(year + 1, 0, 3),
+        }),
+    },
+    {
+        name: 'Holy Week',
+        label: 'Holy Week',
+        rate_change: 25,
+        datesIn: (year) => {
+            const easter = easterSunday(year);
+
+            return { from: addDays(easter, -7), to: easter };
+        },
+    },
+    {
+        name: 'Summer',
+        label: 'Summer',
+        rate_change: 15,
+        datesIn: (year) => ({
+            from: new Date(year, 3, 1),
+            to: new Date(year, 4, 31),
+        }),
+    },
+    {
+        name: 'Rainy season',
+        label: 'Rainy',
+        rate_change: -10,
+        datesIn: (year) => ({
+            from: new Date(year, 6, 1),
+            to: new Date(year, 8, 30),
+        }),
+    },
 ];
+
+/**
+ * The next time a suggested season comes around: this year's if it hasn't
+ * ended, starting today when it's already under way, otherwise next year's.
+ */
+function nextDates(suggestion: Suggestion): { from: Date; to: Date } {
+    const today = startOfDay(new Date());
+    // Last year's may still be running, e.g. Christmas & New Year in early January.
+    const year = [-1, 0, 1]
+        .map((offset) => today.getFullYear() + offset)
+        .find((candidate) => suggestion.datesIn(candidate).to >= today)!;
+    const dates = suggestion.datesIn(year);
+
+    return { from: max([dates.from, today]), to: dates.to };
+}
+
+/** A signed percent, e.g. "+30%" or "−10%". */
+function signedPercent(percent: number): string {
+    return `${percent > 0 ? '+' : '−'}${Math.abs(percent)}%`;
+}
 
 /** e.g. "Dec 20, 2026 – Jan 3, 2027". */
 function period(season: Pick<Season, 'start_date' | 'end_date'>): string {
@@ -62,6 +160,7 @@ function SeasonForm({
               }
             : undefined,
     );
+    const [month, setMonth] = useState<Date>(range?.from ?? new Date());
     const form = useForm({
         name: season?.name ?? '',
         start_date: season?.start_date ?? '',
@@ -80,6 +179,19 @@ function SeasonForm({
                   ? toIsoDate(next.from)
                   : '',
         }));
+    }
+
+    function applySuggestion(suggestion: Suggestion): void {
+        const dates = nextDates(suggestion);
+
+        setRange(dates);
+        setMonth(dates.from);
+        form.setData({
+            name: suggestion.name,
+            rate_change: String(suggestion.rate_change),
+            start_date: toIsoDate(dates.from),
+            end_date: toIsoDate(dates.to),
+        });
     }
 
     function submit(event: FormEvent): void {
@@ -107,22 +219,39 @@ function SeasonForm({
 
             {!season && (
                 <div className="flex flex-wrap gap-1.5">
-                    {suggestions.map((suggestion) => (
-                        <button
-                            key={suggestion.name}
-                            type="button"
-                            onClick={() =>
-                                form.setData((data) => ({
-                                    ...data,
-                                    name: suggestion.name,
-                                    rate_change: String(suggestion.rate_change),
-                                }))
-                            }
-                            className="rounded-full border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
-                        >
-                            {suggestion.name}
-                        </button>
-                    ))}
+                    {suggestions.map((suggestion) => {
+                        const dates = nextDates(suggestion);
+                        const isChosen =
+                            form.data.name === suggestion.name &&
+                            form.data.start_date === toIsoDate(dates.from);
+
+                        return (
+                            <button
+                                key={suggestion.name}
+                                type="button"
+                                aria-pressed={isChosen}
+                                title={`${suggestion.name}, ${format(dates.from, 'MMM d')} – ${format(dates.to, 'MMM d, yyyy')}`}
+                                onClick={() => applySuggestion(suggestion)}
+                                className={cn(
+                                    'flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-xs whitespace-nowrap transition-colors hover:border-foreground/30',
+                                    isChosen &&
+                                        'border-brand bg-brand/5 hover:border-brand',
+                                )}
+                            >
+                                {suggestion.label}
+                                <span
+                                    className={cn(
+                                        'font-semibold tabular-nums',
+                                        suggestion.rate_change > 0
+                                            ? 'text-brand'
+                                            : 'text-sky-700 dark:text-sky-300',
+                                    )}
+                                >
+                                    {signedPercent(suggestion.rate_change)}
+                                </span>
+                            </button>
+                        );
+                    })}
                 </div>
             )}
 
@@ -171,13 +300,16 @@ function SeasonForm({
                 Use a minus for a low season, e.g. −10.
             </p>
 
-            <div className="rounded-2xl border">
+            <div className="overflow-hidden rounded-2xl border">
                 <Calendar
                     mode="range"
                     selected={range}
                     onSelect={chooseRange}
-                    defaultMonth={range?.from ?? new Date()}
-                    className="mx-auto"
+                    month={month}
+                    onMonthChange={setMonth}
+                    // Fill the box: cells widen to share the row, rows keep a normal height.
+                    className="w-full [&_td]:aspect-auto [&_td]:h-10 [&_td_button]:aspect-auto [&_td_button]:h-10"
+                    classNames={{ root: 'w-full' }}
                 />
             </div>
             <InputError
@@ -216,9 +348,8 @@ export default function LessorSeasons({
         <>
             <Head title="Peak seasons" />
 
-            <div className="mx-auto w-full max-w-4xl space-y-6 p-4 md:p-8">
+            <div className="mx-auto w-full max-w-7xl space-y-6 p-4 md:p-8">
                 <PageHeader
-                    eyebrow="Pricing"
                     title="Peak seasons"
                     description="Charge more when demand is high, like Christmas or Holy Week, or less in quiet months. Applies to all your cars."
                     actions={
@@ -238,68 +369,99 @@ export default function LessorSeasons({
                 />
 
                 {seasons.length > 0 ? (
-                    <ul className="divide-y rounded-3xl border bg-background">
-                        {seasons.map((season) => {
-                            const isUp = season.rate_change > 0;
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Season</TableHead>
+                                <TableHead>Dates</TableHead>
+                                <TableHead className="text-right">
+                                    Days
+                                </TableHead>
+                                <TableHead className="text-right">
+                                    Rate change
+                                </TableHead>
+                                <TableHead>
+                                    <span className="sr-only">Actions</span>
+                                </TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {seasons.map((season) => {
+                                const isUp = season.rate_change > 0;
+                                const days =
+                                    differenceInCalendarDays(
+                                        parseISO(season.end_date),
+                                        parseISO(season.start_date),
+                                    ) + 1;
 
-                            return (
-                                <li
-                                    key={season.id}
-                                    className="flex items-center gap-4 px-5 py-4"
-                                >
-                                    <span
-                                        className={cn(
-                                            'flex h-9 min-w-16 items-center justify-center rounded-full px-3 text-sm font-bold tabular-nums',
-                                            isUp
-                                                ? 'bg-brand/10 text-brand'
-                                                : 'bg-sky-500/10 text-sky-700 dark:text-sky-300',
-                                        )}
-                                    >
-                                        {isUp ? '+' : '−'}
-                                        {Math.abs(season.rate_change)}%
-                                    </span>
-                                    <div className="min-w-0 flex-1">
-                                        <p className="truncate font-medium">
+                                return (
+                                    <TableRow key={season.id}>
+                                        <TableCell className="font-medium">
                                             {season.name}
-                                        </p>
-                                        <p className="text-sm text-muted-foreground">
+                                        </TableCell>
+                                        <TableCell className="whitespace-nowrap text-muted-foreground">
                                             {period(season)}
-                                        </p>
-                                    </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        aria-label={`Edit ${season.name}`}
-                                        onClick={() => setEditing(season)}
-                                    >
-                                        <Pencil />
-                                    </Button>
-                                    <ConfirmDialog
-                                        trigger={
+                                        </TableCell>
+                                        <TableCell className="text-right tabular-nums">
+                                            {days}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <span
+                                                className={cn(
+                                                    'inline-flex min-w-14 items-center justify-center rounded-full px-2.5 py-0.5 text-sm font-bold tabular-nums',
+                                                    isUp
+                                                        ? 'bg-brand/10 text-brand'
+                                                        : 'bg-sky-500/10 text-sky-700 dark:text-sky-300',
+                                                )}
+                                            >
+                                                {signedPercent(
+                                                    season.rate_change,
+                                                )}
+                                            </span>
+                                        </TableCell>
+                                        <TableCell className="text-right whitespace-nowrap">
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                aria-label={`Remove ${season.name}`}
+                                                tooltip="Edit"
+                                                aria-label={`Edit ${season.name}`}
+                                                onClick={() =>
+                                                    setEditing(season)
+                                                }
                                             >
-                                                <Trash2 />
+                                                <Pencil />
                                             </Button>
-                                        }
-                                        title={`Remove ${season.name}?`}
-                                        description="Normal rates apply on those days again. Bookings already made keep their price."
-                                        confirmLabel="Remove"
-                                        onConfirm={() =>
-                                            router.delete(
-                                                lessor.seasons.destroy(
-                                                    season.id,
-                                                ).url,
-                                                { preserveScroll: true },
-                                            )
-                                        }
-                                    />
-                                </li>
-                            );
-                        })}
-                    </ul>
+                                            <ConfirmDialog
+                                                trigger={
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        tooltip="Remove"
+                                                        aria-label={`Remove ${season.name}`}
+                                                    >
+                                                        <Trash2 />
+                                                    </Button>
+                                                }
+                                                title={`Remove ${season.name}?`}
+                                                description="Normal rates apply on those days again. Bookings already made keep their price."
+                                                confirmLabel="Remove"
+                                                onConfirm={() =>
+                                                    router.delete(
+                                                        lessor.seasons.destroy(
+                                                            season.id,
+                                                        ).url,
+                                                        {
+                                                            preserveScroll: true,
+                                                        },
+                                                    )
+                                                }
+                                            />
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
+                        </TableBody>
+                    </Table>
                 ) : (
                     <EmptyState
                         icon={Sun}
@@ -319,7 +481,7 @@ export default function LessorSeasons({
                 open={editing !== null}
                 onOpenChange={(isOpen) => !isOpen && setEditing(null)}
             >
-                <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
+                <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
                     {editing !== null && (
                         <SeasonForm
                             key={editing === 'new' ? 'new' : editing.id}

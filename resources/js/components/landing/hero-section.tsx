@@ -1,8 +1,7 @@
 import { Link } from '@inertiajs/react';
-import { BellRing, Copy } from 'lucide-react';
+import { BellRing, Check, Copy } from 'lucide-react';
 import { BookingPageMockup } from '@/components/landing/booking-page-mockup';
 import { BrandButton } from '@/components/public/brand-button';
-import { HandUnderline } from '@/components/public/hand-underline';
 import { Button } from '@/components/ui/button';
 import { register, rent } from '@/routes';
 
@@ -13,28 +12,20 @@ export function HeroSection({ appHost }: { appHost: string }) {
                 aria-hidden
                 className="pointer-events-none absolute -top-40 right-[-10%] size-[720px] rounded-full bg-[radial-gradient(circle,color-mix(in_oklch,var(--brand)_28%,transparent),transparent_65%)]"
             />
-            <div className="relative mx-auto grid max-w-7xl items-center gap-16 px-4 pt-16 pb-24 sm:px-6 lg:grid-cols-[1.15fr_0.85fr] lg:pt-24">
+            <div className="relative mx-auto grid max-w-7xl items-center gap-16 px-4 pt-14 pb-20 sm:px-6 lg:grid-cols-[1.15fr_0.85fr] lg:pt-20">
                 <div className="motion-safe:animate-in motion-safe:duration-700 motion-safe:fade-in motion-safe:slide-in-from-bottom-4">
-                    <p className="flex items-center gap-3 text-xs font-semibold tracking-[0.22em] text-muted-foreground uppercase">
-                        <span
-                            aria-hidden
-                            className="h-0.5 w-10 rounded-full bg-brand"
-                        />
+                    <p className="text-sm font-medium text-muted-foreground">
                         For car rental owners in the Philippines
                     </p>
-                    <h1 className="mt-6 font-display text-5xl leading-[0.95] font-extrabold tracking-tight text-balance sm:text-6xl lg:text-7xl">
+                    <h1 className="mt-4 font-display text-5xl leading-[0.95] font-extrabold tracking-tight text-balance sm:text-6xl lg:text-7xl">
                         Stop taking bookings in the{' '}
-                        <span className="relative inline-block text-brand">
-                            comment section.
-                            <HandUnderline />
-                        </span>
+                        <span className="text-brand">comment section.</span>
                     </h1>
-                    <p className="mt-8 max-w-xl text-lg text-muted-foreground">
-                        Give your rental business its own booking page. Renters
-                        see only your cars, check your calendar and send a
-                        request. You tap confirm. They pay you at pickup.
+                    <p className="mt-6 max-w-lg text-lg text-muted-foreground">
+                        Your own booking page with your cars and your calendar.
+                        Renters send a request, you tap confirm.
                     </p>
-                    <div className="mt-10 flex flex-wrap gap-3">
+                    <div className="mt-8 flex flex-wrap gap-3">
                         <BrandButton
                             size="lg"
                             className="h-12 px-7 text-base"
@@ -53,6 +44,21 @@ export function HeroSection({ appHost }: { appHost: string }) {
                             <Link href={rent()}>See live pages →</Link>
                         </Button>
                     </div>
+                    <ul className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
+                        {[
+                            'No commission',
+                            'Renters pay you at pickup',
+                            'Live in minutes',
+                        ].map((point) => (
+                            <li
+                                key={point}
+                                className="flex items-center gap-1.5"
+                            >
+                                <Check className="size-4 text-brand" />
+                                {point}
+                            </li>
+                        ))}
+                    </ul>
                 </div>
 
                 <div className="relative mx-auto motion-safe:animate-in motion-safe:duration-1000 motion-safe:fade-in motion-safe:slide-in-from-bottom-8">

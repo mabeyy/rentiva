@@ -5,6 +5,7 @@ namespace App\Actions\Renters;
 use App\Models\Booking;
 use App\Models\RenterFlag;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 
 /**
@@ -17,7 +18,7 @@ class GroupRenters
      * Each renter, most recent first, with their bookings (newest first), every
      * number and email they used, and the owner's flag if any number is flagged.
      *
-     * @return Collection<int, array{key: string, phone_keys: array<int, string>, emails: array<int, string>, bookings: Collection<int, Booking>, flag: string|null}>
+     * @return Collection<int, array{key: string, phone_keys: array<int, string>, emails: array<int, string>, bookings: EloquentCollection<int, Booking>, flag: string|null}>
      */
     public function handle(User $owner): Collection
     {
@@ -51,12 +52,12 @@ class GroupRenters
 
         return $bookings
             ->groupBy(fn (Booking $booking): string => $find("phone:{$booking->renter_phone_key}"))
-            ->map(function (Collection $group) use ($flags): array {
-                $phoneKeys = $group->pluck('renter_phone_key')->unique()->values()->all();
+            ->map(function (EloquentCollection $group) use ($flags): array {
+                $phoneKeys = $group->map(fn (Booking $booking): string => $booking->renter_phone_key ?? '')->unique()->values()->all();
 
                 return [
                     // The number from their latest booking identifies them.
-                    'key' => $group->first()->renter_phone_key,
+                    'key' => $phoneKeys[0],
                     'phone_keys' => $phoneKeys,
                     'emails' => $group->pluck('renter_email')->filter()->map(fn (string $email): string => strtolower($email))->unique()->values()->all(),
                     'bookings' => $group->values(),
@@ -69,7 +70,7 @@ class GroupRenters
     /**
      * The renter a mobile number belongs to, if they've booked with the owner.
      *
-     * @return array{key: string, phone_keys: array<int, string>, emails: array<int, string>, bookings: Collection<int, Booking>, flag: string|null}|null
+     * @return array{key: string, phone_keys: array<int, string>, emails: array<int, string>, bookings: EloquentCollection<int, Booking>, flag: string|null}|null
      */
     public function find(User $owner, string $phoneKey): ?array
     {

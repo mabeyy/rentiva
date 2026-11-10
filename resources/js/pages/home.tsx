@@ -1,9 +1,8 @@
 import { Head } from '@inertiajs/react';
 import { ClosingCta } from '@/components/landing/closing-cta';
+import { FaqSection } from '@/components/landing/faq-section';
 import { FeatureBento } from '@/components/landing/feature-bento';
 import { HeroSection } from '@/components/landing/hero-section';
-import { InboxComparison } from '@/components/landing/inbox-comparison';
-import { LinkShowcase } from '@/components/landing/link-showcase';
 import type { PublicPlan } from '@/components/landing/pricing-section';
 import { PricingSection } from '@/components/landing/pricing-section';
 import { SetupSteps } from '@/components/landing/setup-steps';
@@ -23,11 +22,10 @@ export default function Home({
             <Head title="Booking pages for car rental owners" />
 
             <HeroSection appHost={appHost} />
-            <InboxComparison />
-            <LinkShowcase appHost={appHost} />
             <FeatureBento />
             <SetupSteps />
             <PricingSection plans={plans} />
+            <FaqSection />
             <ClosingCta />
         </>
     );

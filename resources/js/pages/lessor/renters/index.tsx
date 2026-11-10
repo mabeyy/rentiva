@@ -52,9 +52,8 @@ export default function LessorRenters({
         <>
             <Head title="Renters" />
 
-            <div className="space-y-6 p-4 md:p-8">
+            <div className="mx-auto w-full max-w-7xl space-y-6 p-4 md:p-8">
                 <PageHeader
-                    eyebrow="Your customers"
                     title="Renters"
                     description="Everyone who has booked with you. Bookings with the same mobile number or email count as one renter. Flag anyone you'd rather not rent to again."
                 />

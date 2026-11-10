@@ -229,9 +229,8 @@ export default function LessorPickupLocations({
         <>
             <Head title="Pickup locations" />
 
-            <div className="mx-auto w-full max-w-5xl space-y-8 p-4 md:p-8">
+            <div className="mx-auto w-full max-w-7xl space-y-8 p-4 md:p-8">
                 <PageHeader
-                    eyebrow="Where renters meet you"
                     title="Pickup locations"
                     description="Add every place you hand cars over, like your branch or the airport. Each car is picked up at one of these."
                 />

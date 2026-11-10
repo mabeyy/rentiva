@@ -19,7 +19,7 @@ class MainPickupLocationController extends Controller
         Gate::authorize('update', $pickupLocation);
 
         $storefront = $request->user()->storefront;
-        abort_unless($storefront, 404);
+        abort_unless($storefront !== null, 404);
 
         $storefront->update([
             'main_pickup_location_id' => $pickupLocation->id,

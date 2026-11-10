@@ -220,9 +220,12 @@ function PickupReceipt() {
 
 export function FeatureBento() {
     return (
-        <section className="bg-paper">
-            <div className="mx-auto max-w-7xl px-4 py-24 sm:px-6">
-                <h2 className="max-w-3xl font-display text-4xl font-bold tracking-tight text-balance sm:text-5xl">
+        <section className="bg-background">
+            <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6">
+                <p className="text-sm font-semibold tracking-widest text-muted-foreground uppercase">
+                    Features
+                </p>
+                <h2 className="mt-3 max-w-3xl font-display text-4xl font-bold tracking-tight text-balance sm:text-5xl">
                     Built for how rentals actually run here.
                 </h2>
                 <div className="mt-12 grid gap-4 lg:grid-cols-6">
