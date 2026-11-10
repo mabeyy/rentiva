@@ -4,6 +4,7 @@ import {
     Contact,
     CreditCard,
     History,
+    Inbox,
     Landmark,
     Layers,
     LayoutGrid,
@@ -11,6 +12,7 @@ import {
     ListChecks,
     MapPin,
     Plug,
+    ScrollText,
     Settings,
     ShieldCheck,
     Sparkles,
@@ -21,6 +23,7 @@ import {
     UserCog,
     Users,
     Wallet,
+    Wrench,
 } from 'lucide-react';
 import admin from '@/routes/admin';
 import lessor from '@/routes/lessor';
@@ -45,6 +48,11 @@ export const navGroupsByRole: Record<UserRole, NavGroup[]> = {
                     href: admin.activity(),
                     icon: History,
                 },
+                {
+                    title: 'Admin log',
+                    href: admin.log(),
+                    icon: ScrollText,
+                },
             ],
         },
         {
@@ -56,6 +64,16 @@ export const navGroupsByRole: Record<UserRole, NavGroup[]> = {
                     title: 'Bookings',
                     href: admin.bookings.index(),
                     icon: CalendarCheck,
+                },
+                {
+                    title: 'Reviews',
+                    href: admin.reviews.index(),
+                    icon: Star,
+                },
+                {
+                    title: 'Help requests',
+                    href: admin.support.index(),
+                    icon: Inbox,
                 },
             ],
         },
@@ -154,6 +172,12 @@ export const navGroupsByRole: Record<UserRole, NavGroup[]> = {
                     icon: MapPin,
                 },
                 {
+                    title: 'Maintenance',
+                    permission: 'cars',
+                    href: lessor.maintenance(),
+                    icon: Wrench,
+                },
+                {
                     title: 'Peak seasons',
                     permission: 'cars',
                     href: lessor.seasons.index(),
@@ -185,7 +209,7 @@ export const navGroupsByRole: Record<UserRole, NavGroup[]> = {
                 {
                     title: 'Connections',
                     permission: 'owner',
-                    href: lessor.connections.email(),
+                    href: lessor.connections.notifications(),
                     section: '/lessor/connections',
                     icon: Plug,
                 },
