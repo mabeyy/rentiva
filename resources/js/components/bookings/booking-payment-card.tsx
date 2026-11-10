@@ -1,25 +1,22 @@
 import { Form } from '@inertiajs/react';
-import { format, parseISO } from 'date-fns';
 import type { LucideIcon } from 'lucide-react';
 import {
     Banknote,
-    Check,
     CircleCheck,
     Clock,
-    Copy,
     Landmark,
     TriangleAlert,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { TransferAccountCard } from '@/components/bookings/transfer-account-card';
 import { FormField } from '@/components/form-field';
 import { BrandButton } from '@/components/public/brand-button';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
-import { useClipboard } from '@/hooks/use-clipboard';
-import { formatPeso } from '@/lib/format';
+import { formatManilaDateTime, formatPeso } from '@/lib/format';
 import type { PaymentAccount } from '@/components/lessor/payment-settings-section';
 import type { Booking } from '@/types';
+import { FilePicker } from '@/components/file-picker';
 
 /** The owner's accounts to transfer to, and the signed URL to report it. */
 export type TransferDetails = {
@@ -27,29 +24,6 @@ export type TransferDetails = {
     /** Set while the renter should (re)send the transfer. */
     submit_url: string | null;
 };
-
-function CopyRow({ label, value }: { label: string; value: string }) {
-    const [copiedText, copy] = useClipboard();
-    const isCopied = copiedText === value;
-
-    return (
-        <div className="flex items-center justify-between gap-3 py-2">
-            <div className="min-w-0">
-                <p className="text-xs text-muted-foreground">{label}</p>
-                <p className="truncate font-medium tabular-nums">{value}</p>
-            </div>
-            <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => copy(value)}
-            >
-                {isCopied ? <Check /> : <Copy />}
-                {isCopied ? 'Copied' : 'Copy'}
-            </Button>
-        </div>
-    );
-}
 
 function Notice({
     icon: Icon,
@@ -93,10 +67,27 @@ export function BookingPaymentCard({
     transfer: TransferDetails | null;
 }) {
     if (['declined', 'cancelled'].includes(booking.status.value)) {
+        // Someone who paid and then lost the booking needs to hear about their money.
+        if (booking.amount_paid > 0 && !booking.refunded_at) {
+            return (
+                <section className="rounded-3xl border p-6">
+                    <Notice
+                        icon={Banknote}
+                        tone="neutral"
+                        title="About your payment"
+                    >
+                        You paid {formatPeso(booking.amount_paid)} for this
+                        booking. The owner handles refunds under their
+                        cancellation policy; contact them if you haven't heard
+                        back. You'll see it here once they record it.
+                    </Notice>
+                </section>
+            );
+        }
+
         return null;
     }
 
-    const total = formatPeso(booking.total);
     const isTransfer = booking.payment_method.value === 'bank_transfer';
     const isDownPayment = booking.down_payment > 0;
     const transferAmount = formatPeso(booking.transfer_amount);
@@ -113,13 +104,24 @@ export function BookingPaymentCard({
                 {booking.payment_method.label}
             </h2>
 
-            {!isTransfer && (
-                <p className="text-muted-foreground">
-                    Bring <strong className="text-foreground">{total}</strong>{' '}
-                    when you collect the car. Pay the owner in cash or as they
-                    ask.
-                </p>
-            )}
+            {!isTransfer &&
+                (booking.payment_status.value === 'paid' ? (
+                    <Notice icon={CircleCheck} tone="success" title="Paid">
+                        The owner received {formatPeso(booking.amount_paid)}.{' '}
+                        {booking.balance_due > 0
+                            ? `Bring the remaining ${formatPeso(booking.balance_due)} at pickup.`
+                            : "You're all set."}
+                    </Notice>
+                ) : (
+                    <p className="text-muted-foreground">
+                        Bring{' '}
+                        <strong className="text-foreground">
+                            {formatPeso(booking.balance_due)}
+                        </strong>{' '}
+                        when you collect the car. Pay the owner in cash or as
+                        they ask.
+                    </p>
+                ))}
 
             {isTransfer && booking.status.value === 'pending' && (
                 <Notice icon={Clock} tone="neutral" title="Nothing to pay yet">
@@ -145,13 +147,15 @@ export function BookingPaymentCard({
                     tone="success"
                     title={isDownPayment ? 'Down payment received' : 'Paid'}
                 >
-                    The owner received {transferAmount}
+                    The owner received {formatPeso(booking.amount_paid)}
                     {booking.paid_at &&
-                        ` on ${format(parseISO(booking.paid_at), 'MMM d, yyyy')}`}
+                        ` on ${formatManilaDateTime(booking.paid_at).split(' · ')[0]}`}
                     .{' '}
-                    {isDownPayment
-                        ? `Bring the remaining ${balance} at pickup.`
-                        : "You're all set."}
+                    {booking.balance_due > 0
+                        ? `Bring the remaining ${formatPeso(booking.balance_due)} at pickup.`
+                        : booking.overpaid > 0
+                          ? `That's ${formatPeso(booking.overpaid)} more than the new total; the owner will refund the difference.`
+                          : "You're all set."}
                 </Notice>
             )}
 
@@ -177,7 +181,7 @@ export function BookingPaymentCard({
                         <Notice
                             icon={Clock}
                             tone="warning"
-                            title={`Send it by ${format(parseISO(booking.payment_due_at), 'EEE, MMM d · h:mm a')}`}
+                            title={`Send it by ${formatManilaDateTime(booking.payment_due_at)}`}
                         >
                             If the owner doesn't receive your transfer by then,
                             the booking is cancelled and the dates are released.
@@ -202,32 +206,10 @@ export function BookingPaymentCard({
                             </p>
                         )}
                         {transfer.accounts.map((account) => (
-                            <div
+                            <TransferAccountCard
                                 key={account.id}
-                                className="grid gap-4 rounded-2xl border p-4 sm:grid-cols-[1fr_auto] sm:items-center"
-                            >
-                                <div className="divide-y">
-                                    <CopyRow
-                                        label="Bank or e-wallet"
-                                        value={account.bank_name}
-                                    />
-                                    <CopyRow
-                                        label="Account name"
-                                        value={account.account_name}
-                                    />
-                                    <CopyRow
-                                        label="Account number"
-                                        value={account.account_number}
-                                    />
-                                </div>
-                                {account.qr_url && (
-                                    <img
-                                        src={account.qr_url}
-                                        alt={`QR code for ${account.bank_name}`}
-                                        className="mx-auto size-36 rounded-2xl border bg-white object-contain p-2"
-                                    />
-                                )}
-                            </div>
+                                account={account}
+                            />
                         ))}
                     </div>
 
@@ -258,13 +240,11 @@ export function BookingPaymentCard({
                                         label="Screenshot of the transfer"
                                         error={errors.payment_proof}
                                     >
-                                        <Input
+                                        <FilePicker
                                             id="payment_proof"
                                             name="payment_proof"
-                                            type="file"
+                                            placeholder="Add the screenshot from your app"
                                             required
-                                            accept="image/jpeg,image/png,image/webp"
-                                            className="bg-background"
                                         />
                                     </FormField>
                                 </div>

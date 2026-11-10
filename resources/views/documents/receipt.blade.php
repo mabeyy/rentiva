@@ -37,10 +37,20 @@
         <tr>
             <th>Status</th>
             <td>
-                <span class="badge">{{ $booking->payment_status === \App\Enums\PaymentStatus::Paid ? 'Paid' : 'Not paid yet' }}</span>
+                <span class="badge">{{ match (true) {
+                    $booking->payment_status !== \App\Enums\PaymentStatus::Paid => 'Not paid yet',
+                    $booking->balanceDue() > 0 => 'Part paid',
+                    default => 'Paid',
+                } }}</span>
                 @if ($booking->paid_at) <span class="muted">on {{ $booking->paid_at->timezone(\App\Models\Booking::PICKUP_TIMEZONE)->format('M j, Y') }}</span>@endif
             </td>
         </tr>
+        @if ($booking->amountPaid() > 0)
+            <tr><th>Paid</th><td>{{ $peso($booking->amountPaid()) }}</td></tr>
+        @endif
+        @if ($booking->payment_status === \App\Enums\PaymentStatus::Paid && $booking->balanceDue() > 0)
+            <tr><th>Balance at pickup</th><td>{{ $peso($booking->balanceDue()) }}</td></tr>
+        @endif
         @if ($booking->payment_reference)
             <tr><th>Reference</th><td>{{ $booking->payment_reference }}</td></tr>
         @endif

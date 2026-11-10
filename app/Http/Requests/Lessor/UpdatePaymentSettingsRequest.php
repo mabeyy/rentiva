@@ -3,9 +3,11 @@
 namespace App\Http\Requests\Lessor;
 
 use App\Models\PaymentAccount;
+use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class UpdatePaymentSettingsRequest extends FormRequest
 {
@@ -67,6 +69,32 @@ class UpdatePaymentSettingsRequest extends FormRequest
             'accounts.*.bank_name.required' => __('Enter the bank or e-wallet.'),
             'accounts.*.account_name.required' => __('Enter the name on the account.'),
             'accounts.*.account_number.required' => __('Enter the account number.'),
+        ];
+    }
+
+    /**
+     * Every transfer account needs a QR code renters can scan: new accounts
+     * must upload one, and saved accounts without one must add it.
+     *
+     * @return array<int, Closure(Validator): void>
+     */
+    public function after(): array
+    {
+        return [
+            function (Validator $validator): void {
+                $savedWithQr = PaymentAccount::query()
+                    ->where('storefront_id', $this->user()->storefront?->id)
+                    ->whereNotNull('qr_path')
+                    ->pluck('id');
+
+                foreach ((array) $this->input('accounts', []) as $index => $account) {
+                    $hasSavedQr = isset($account['id']) && $savedWithQr->contains((int) $account['id']);
+
+                    if (! $this->hasFile("accounts.{$index}.qr") && ! $hasSavedQr) {
+                        $validator->errors()->add("accounts.{$index}.qr", __('Add the QR code renters scan to pay.'));
+                    }
+                }
+            },
         ];
     }
 }

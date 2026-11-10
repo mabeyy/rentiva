@@ -79,6 +79,11 @@ class ExportController extends Controller
     {
         return response()->streamDownload(function () use ($headings, $rows): void {
             $handle = fopen('php://output', 'w');
+
+            if ($handle === false) {
+                return;
+            }
+
             fputcsv($handle, $headings);
             $rows($handle);
             fclose($handle);

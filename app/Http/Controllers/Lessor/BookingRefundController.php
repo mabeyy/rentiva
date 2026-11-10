@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Number;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class BookingRefundController extends Controller
@@ -28,10 +29,13 @@ class BookingRefundController extends Controller
         $data = $request->validate([
             'amount' => ['required', 'numeric', 'min:0', 'max:'.$paid],
             'reference' => ['nullable', 'string', 'max:60'],
-            'note' => ['nullable', 'required_unless:amount,'.$paid, 'string', 'max:255'],
-        ], [
-            'note.required_unless' => __('Say why part of the payment was kept.'),
+            'note' => ['nullable', 'string', 'max:255'],
         ]);
+
+        // Compare in centavos, so "1500.00" counts as refunding all of ₱1,500.
+        if ((int) round($data['amount'] * 100) < $booking->amountPaid() && blank($data['note'] ?? null)) {
+            throw ValidationException::withMessages(['note' => __('Say why part of the payment was kept.')]);
+        }
 
         $amount = (int) round($data['amount'] * 100);
         $booking->forceFill([

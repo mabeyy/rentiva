@@ -27,7 +27,7 @@ class PaymentSettingController extends Controller
             'settings' => $storefront ? [
                 ...$storefront->only(['accepts_pay_at_pickup', 'accepts_bank_transfer', 'transfer_deadline_minutes', 'down_payment_enabled', 'down_payment_percent']),
                 'down_payment_included' => $request->user()->planIncludes('down_payments'),
-                'accounts' => PaymentAccountResource::collection($storefront->paymentAccounts)->resolve(),
+                'accounts' => PaymentAccountResource::collection($storefront->paymentAccounts()->get())->resolve(),
             ] : null,
         ]);
     }
@@ -59,9 +59,9 @@ class PaymentSettingController extends Controller
      */
     private function syncAccounts(UpdatePaymentSettingsRequest $request, Storefront $storefront): void
     {
-        $keptIds = collect($request->validated('accounts', []))->map(function (array $data, int $index) use ($request, $storefront): int {
+        $keptIds = collect($request->safe()->array('accounts'))->map(function (array $data, int $index) use ($request, $storefront): int {
             $account = isset($data['id'])
-                ? $storefront->paymentAccounts()->findOrFail($data['id'])
+                ? $storefront->paymentAccounts()->whereKey($data['id'])->firstOrFail()
                 : $storefront->paymentAccounts()->make();
 
             $account->fill([...Arr::only($data, ['bank_name', 'account_name', 'account_number']), 'position' => $index]);

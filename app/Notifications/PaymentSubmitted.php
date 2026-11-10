@@ -12,6 +12,9 @@ class PaymentSubmitted extends Notification implements ShouldQueue
 {
     use Queueable;
 
+    /** Skip quietly if the booking, car or invoice was deleted before it sent. */
+    public bool $deleteWhenMissingModels = true;
+
     /**
      * Create a new notification instance.
      */

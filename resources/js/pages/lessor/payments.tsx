@@ -1,14 +1,21 @@
 import { Form, Head, Link } from '@inertiajs/react';
 import { Store } from 'lucide-react';
+import { useState } from 'react';
 import PaymentSettingController from '@/actions/App/Http/Controllers/Lessor/PaymentSettingController';
 import { EmptyState } from '@/components/empty-state';
 import { FormSaveBar } from '@/components/form-save-bar';
-import { FormSection } from '@/components/lessor/form-section';
 import { PageHeader } from '@/components/lessor/page-header';
+import { SectionNav } from '@/components/lessor/section-nav';
 import type { PaymentSettings } from '@/components/lessor/payment-settings-section';
 import { PaymentSettingsSection } from '@/components/lessor/payment-settings-section';
 import { BrandButton } from '@/components/public/brand-button';
 import lessor from '@/routes/lessor';
+
+const paymentSections = [
+    { id: 'methods', label: 'How renters pay' },
+    { id: 'accounts', label: 'Transfer accounts' },
+    { id: 'rules', label: 'Transfer rules' },
+];
 
 export default function LessorPayments({
     settings,
@@ -16,42 +23,54 @@ export default function LessorPayments({
     /** Null until the lessor creates their booking page. */
     settings: PaymentSettings | null;
 }) {
+    const [acceptsTransfer, setAcceptsTransfer] = useState(
+        settings?.accepts_bank_transfer ?? false,
+    );
+
     return (
         <>
             <Head title="Payments" />
 
-            <div className="mx-auto w-full max-w-5xl space-y-10 p-4 md:p-8">
+            <div className="mx-auto w-full max-w-7xl space-y-6 p-4 md:p-8">
                 <PageHeader
-                    eyebrow="Getting paid"
                     title="Payments"
-                    description="Choose how renters pay you and which accounts they transfer to. Check transfers on the Transfers page."
+                    description="Choose how renters pay you. Transfers they send show on the Transfers page for you to check."
                 />
 
                 {settings ? (
-                    <Form
-                        {...PaymentSettingController.update.form()}
-                        options={{ preserveScroll: true }}
-                        className="space-y-6"
-                    >
-                        {({ processing, errors }) => (
-                            <>
-                                <FormSection
-                                    title="Payment methods"
-                                    description="Renters pick one of these when they book. You can accept both."
-                                >
+                    <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-[minmax(0,1fr)_240px]">
+                        <Form
+                            {...PaymentSettingController.update.form()}
+                            options={{ preserveScroll: true }}
+                            className="space-y-6"
+                        >
+                            {({ processing, errors }) => (
+                                <>
                                     <PaymentSettingsSection
                                         settings={settings}
                                         errors={errors}
+                                        acceptsTransfer={acceptsTransfer}
+                                        onAcceptsTransferChange={
+                                            setAcceptsTransfer
+                                        }
                                     />
-                                </FormSection>
-                                <FormSaveBar
-                                    label="Save payment settings"
-                                    hint="Applies to new booking requests."
-                                    processing={processing}
-                                />
-                            </>
-                        )}
-                    </Form>
+                                    <FormSaveBar
+                                        label="Save payment settings"
+                                        hint="Applies to new booking requests."
+                                        processing={processing}
+                                    />
+                                </>
+                            )}
+                        </Form>
+
+                        <SectionNav
+                            sections={
+                                acceptsTransfer
+                                    ? paymentSections
+                                    : paymentSections.slice(0, 1)
+                            }
+                        />
+                    </div>
                 ) : (
                     <EmptyState
                         icon={Store}

@@ -37,6 +37,7 @@ import { formatDateRange, formatPeso, toIsoDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import lessor from '@/routes/lessor';
 import type { Booking } from '@/types';
+import { Hint } from '@/components/info-tip';
 
 type Granularity = 'day' | 'week' | 'month';
 
@@ -189,9 +190,8 @@ export default function LessorRevenue({
         <>
             <Head title="Revenue" />
 
-            <div className="space-y-8 p-4 md:p-8">
+            <div className="mx-auto w-full max-w-7xl space-y-8 p-4 md:p-8">
                 <PageHeader
-                    eyebrow="Your earnings"
                     title="Revenue"
                     description="What your bookings brought in, by pickup date. Counts confirmed and completed trips."
                     actions={
@@ -379,19 +379,22 @@ export default function LessorRevenue({
                                                     )}
                                                     {row.label}
                                                     {hasChildren && (
-                                                        <a
-                                                            href={exportUrl(
-                                                                row.key,
-                                                            )}
-                                                            onClick={(event) =>
-                                                                event.stopPropagation()
-                                                            }
-                                                            title={`Export ${row.label} by day`}
-                                                            aria-label={`Export ${row.label} by day`}
-                                                            className="ml-1 rounded p-1 text-muted-foreground opacity-0 transition group-hover:opacity-100 hover:bg-muted hover:text-foreground focus-visible:opacity-100"
-                                                        >
-                                                            <Download className="size-3.5" />
-                                                        </a>
+                                                        <Hint text="Export by day">
+                                                            <a
+                                                                href={exportUrl(
+                                                                    row.key,
+                                                                )}
+                                                                onClick={(
+                                                                    event,
+                                                                ) =>
+                                                                    event.stopPropagation()
+                                                                }
+                                                                aria-label={`Export ${row.label} by day`}
+                                                                className="ml-1 rounded p-1 text-muted-foreground opacity-0 transition group-hover:opacity-100 hover:bg-muted hover:text-foreground focus-visible:opacity-100"
+                                                            >
+                                                                <Download className="size-3.5" />
+                                                            </a>
+                                                        </Hint>
                                                     )}
                                                 </span>
                                             </TableCell>

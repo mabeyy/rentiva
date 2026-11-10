@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Lessor;
 
+use App\Actions\Images\StoreOptimizedImage;
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
 use App\Models\BookingInspection;
@@ -44,8 +45,8 @@ class BookingInspectionController extends Controller
             'fuel_level' => $data['fuel_level'],
             'odometer' => $data['odometer'],
             'notes' => $data['notes'] ?? null,
-            'photos' => collect($request->file('photos', []))->map(fn ($photo) => $photo->store("inspections/{$booking->id}", 'local'))->all(),
-            'recorded_by' => TeamMember::acting()?->name ?? $request->user()->name,
+            'photos' => collect($request->file('photos', []))->map(fn ($photo) => app(StoreOptimizedImage::class)->handle($photo, "inspections/{$booking->id}", 'local'))->all(),
+            'recorded_by' => TeamMember::acting()->name ?? $request->user()->name,
         ]);
 
         $booking->recordEvent($data['type'] === 'pickup' ? 'pickup_checked' : 'return_checked', __(':km km · fuel :fuel/8', [

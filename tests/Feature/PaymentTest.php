@@ -83,7 +83,7 @@ describe('owner settings', function () {
             'accepts_bank_transfer' => '1',
             'accounts' => [
                 ['bank_name' => 'GCash', 'account_name' => 'Juan Dela Cruz', 'account_number' => '09171234567', 'qr' => UploadedFile::fake()->image('qr.png')],
-                ['bank_name' => 'BDO', 'account_name' => 'Juan Dela Cruz', 'account_number' => '0012 3456 7890'],
+                ['bank_name' => 'BDO', 'account_name' => 'Juan Dela Cruz', 'account_number' => '0012 3456 7890', 'qr' => UploadedFile::fake()->image('bdo.png')],
             ],
         ])->assertSessionHasNoErrors();
 
@@ -107,7 +107,7 @@ describe('owner settings', function () {
 
     test('saving removes accounts the owner deleted and keeps the rest', function () {
         $storefront = Storefront::factory()->create(['accepts_bank_transfer' => true]);
-        $kept = PaymentAccount::factory()->for($storefront)->create(['bank_name' => 'BDO']);
+        $kept = PaymentAccount::factory()->for($storefront)->create(['bank_name' => 'BDO', 'qr_path' => 'payment-qr/bdo.png']);
         PaymentAccount::factory()->for($storefront)->create(['bank_name' => 'GCash', 'position' => 1]);
 
         $this->actingAs($storefront->owner)->put(route('lessor.payments.update'), [
@@ -129,6 +129,27 @@ describe('owner settings', function () {
                 'accounts' => [['bank_name' => 'BDO']],
             ])
             ->assertSessionHasErrors(['accounts.0.account_name', 'accounts.0.account_number']);
+    });
+
+    test('every transfer account needs a QR code, unless one is already saved', function () {
+        $storefront = Storefront::factory()->create(['accepts_bank_transfer' => true]);
+        $withQr = PaymentAccount::factory()->for($storefront)->create(['qr_path' => 'payment-qr/saved.png']);
+        $withoutQr = PaymentAccount::factory()->for($storefront)->create(['qr_path' => null, 'position' => 1]);
+
+        $this->actingAs($storefront->owner)
+            ->put(route('lessor.payments.update'), [
+                'accepts_bank_transfer' => '1',
+                'accounts' => [
+                    ['id' => $withQr->id, 'bank_name' => 'BDO', 'account_name' => 'Juan', 'account_number' => '1'],
+                    ['id' => $withoutQr->id, 'bank_name' => 'BPI', 'account_name' => 'Juan', 'account_number' => '2'],
+                    ['bank_name' => 'GCash', 'account_name' => 'Juan', 'account_number' => '3'],
+                ],
+            ])
+            ->assertSessionHasErrors([
+                'accounts.1.qr' => 'Add the QR code renters scan to pay.',
+                'accounts.2.qr' => 'Add the QR code renters scan to pay.',
+            ])
+            ->assertSessionDoesntHaveErrors('accounts.0.qr');
     });
 
     test('switching bank transfer off keeps the saved accounts', function () {
@@ -201,13 +222,15 @@ describe('renter transfer', function () {
         Notification::assertSentTo($booking->car->owner, PaymentSubmitted::class);
     });
 
-    test('a transfer cannot be sent before the owner confirms', function () {
+    test('a transfer cannot be sent before the owner confirms; the renter is sent back to their booking', function () {
         $booking = transferBooking(['status' => BookingStatus::Pending, 'confirmed_at' => null]);
 
         $this->post(paymentUrl($booking), [
             'payment_reference' => 'X',
             'payment_proof' => UploadedFile::fake()->image('receipt.jpg'),
-        ])->assertForbidden();
+        ])->assertRedirect($booking->manageUrl());
+
+        expect($booking->fresh())->payment_status->toBe(PaymentStatus::Unpaid)->payment_reference->toBeNull();
     });
 
     test('pay-at-pickup bookings take no transfer', function () {
@@ -216,7 +239,9 @@ describe('renter transfer', function () {
         $this->post(paymentUrl($booking), [
             'payment_reference' => 'X',
             'payment_proof' => UploadedFile::fake()->image('receipt.jpg'),
-        ])->assertForbidden();
+        ])->assertRedirect($booking->manageUrl());
+
+        expect($booking->fresh()->payment_reference)->toBeNull();
     });
 });
 

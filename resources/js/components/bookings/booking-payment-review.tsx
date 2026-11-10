@@ -1,4 +1,4 @@
-import { format, parseISO } from 'date-fns';
+import { usePage } from '@inertiajs/react';
 import { Landmark } from 'lucide-react';
 import { useState } from 'react';
 import BookingPaymentController from '@/actions/App/Http/Controllers/Lessor/BookingPaymentController';
@@ -12,8 +12,9 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { formatPeso } from '@/lib/format';
+import { formatManilaDateTime, formatPeso } from '@/lib/format';
 import type { Booking } from '@/types';
+import { ImageLightbox } from '@/components/image-lightbox';
 
 /**
  * Payment state of a bank-transfer booking for its owner, with a "Check
@@ -22,8 +23,15 @@ import type { Booking } from '@/types';
  */
 export function BookingPaymentReview({ booking }: { booking: Booking }) {
     const [isOpen, setIsOpen] = useState(false);
+    const { workspace } = usePage<{
+        workspace?: { permissions: string[] } | null;
+    }>().props;
 
-    if (booking.payment_method.value !== 'bank_transfer') {
+    // Checking transfers is for the owner and staff who handle payments.
+    if (
+        booking.payment_method.value !== 'bank_transfer' ||
+        (workspace && !workspace.permissions.includes('payments'))
+    ) {
         return null;
     }
 
@@ -42,11 +50,7 @@ export function BookingPaymentReview({ booking }: { booking: Booking }) {
                     ) &&
                     booking.status.value === 'confirmed' && (
                         <span className="text-xs text-muted-foreground">
-                            due{' '}
-                            {format(
-                                parseISO(booking.payment_due_at),
-                                'MMM d, h:mm a',
-                            )}
+                            due {formatManilaDateTime(booking.payment_due_at)}
                         </span>
                     )}
                 {isToCheck && (
@@ -104,22 +108,21 @@ export function BookingPaymentReview({ booking }: { booking: Booking }) {
                             </dt>
                             <dd className="font-medium">
                                 {booking.payment_submitted_at &&
-                                    format(
-                                        parseISO(booking.payment_submitted_at),
-                                        'MMM d, h:mm a',
+                                    formatManilaDateTime(
+                                        booking.payment_submitted_at,
                                     )}
                             </dd>
                         </div>
                     </dl>
 
                     {booking.has_payment_proof && (
-                        <a
-                            href={BookingPaymentController.proof.url(
+                        <ImageLightbox
+                            src={BookingPaymentController.proof.url(
                                 booking.reference,
                             )}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="Open full size"
+                            alt="Renter's transfer screenshot"
+                            label="Enlarge transfer screenshot"
+                            className="block w-full"
                         >
                             <img
                                 src={BookingPaymentController.proof.url(
@@ -128,7 +131,7 @@ export function BookingPaymentReview({ booking }: { booking: Booking }) {
                                 alt="Renter's transfer screenshot"
                                 className="max-h-80 w-full rounded-2xl border bg-muted object-contain"
                             />
-                        </a>
+                        </ImageLightbox>
                     )}
 
                     <TransferDecision

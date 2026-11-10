@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Number;
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -35,8 +36,8 @@ class BookingPaymentController extends Controller
         Gate::authorize('update', $booking);
         abort_unless($booking->hasTransferToCheck(), 409);
 
-        $booking->forceFill(['payment_status' => PaymentStatus::Paid, 'paid_at' => now()])->save();
-        $booking->recordEvent('payment_approved', $booking->formattedTotal());
+        $booking->forceFill(['payment_status' => PaymentStatus::Paid, 'paid_at' => now(), 'amount_paid' => $booking->transferAmount()])->save();
+        $booking->recordEvent('payment_approved', Number::currency($booking->amount_paid / 100, 'PHP', 'en_PH') ?: null);
         $this->notifyRenter($booking);
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Payment for :reference marked as paid.', ['reference' => $booking->reference])]);

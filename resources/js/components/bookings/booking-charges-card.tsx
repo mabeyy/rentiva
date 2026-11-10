@@ -10,6 +10,7 @@ import { formatPeso } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import lessor from '@/routes/lessor';
 import type { Booking } from '@/types';
+import { Hint } from '@/components/info-tip';
 
 /**
  * Charges added after booking, such as a late return, fuel or damage. Each
@@ -49,22 +50,27 @@ export function BookingChargesCard({
                             <span>{charge.label}</span>
                             <span className="flex items-center gap-1 tabular-nums">
                                 {formatPeso(charge.amount)}
-                                <button
-                                    type="button"
-                                    aria-label={`Remove ${charge.label}`}
-                                    className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                                    onClick={() =>
-                                        router.delete(
-                                            lessor.bookings.charges.destroy({
-                                                booking: booking.reference,
-                                                charge: charge.id,
-                                            }).url,
-                                            { preserveScroll: true },
-                                        )
-                                    }
-                                >
-                                    <X className="size-3.5" />
-                                </button>
+                                <Hint text="Remove charge">
+                                    <button
+                                        type="button"
+                                        aria-label={`Remove ${charge.label}`}
+                                        className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                                        onClick={() =>
+                                            router.delete(
+                                                lessor.bookings.charges.destroy(
+                                                    {
+                                                        booking:
+                                                            booking.reference,
+                                                        charge: charge.id,
+                                                    },
+                                                ).url,
+                                                { preserveScroll: true },
+                                            )
+                                        }
+                                    >
+                                        <X className="size-3.5" />
+                                    </button>
+                                </Hint>
                             </span>
                         </li>
                     ))}

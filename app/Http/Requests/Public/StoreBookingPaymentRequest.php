@@ -9,15 +9,13 @@ use Illuminate\Foundation\Http\FormRequest;
 class StoreBookingPaymentRequest extends FormRequest
 {
     /**
-     * Only a confirmed bank-transfer booking without an accepted transfer takes
-     * a submission. The signed URL already proves the guest holds the link.
+     * The signed URL already proves the guest holds the link. Whether the
+     * booking still takes a transfer is checked in the controller, so a
+     * second tab gets a friendly message instead of an error page.
      */
     public function authorize(): bool
     {
-        /** @var Booking $booking */
-        $booking = $this->route('booking');
-
-        return $booking->awaitsTransfer();
+        return true;
     }
 
     /**

@@ -21,6 +21,9 @@ import { usePlanFeature } from '@/hooks/use-plan-feature';
 import { cn } from '@/lib/utils';
 import lessor from '@/routes/lessor';
 import type { Booking, BookingInspection } from '@/types';
+import { Hint } from '@/components/info-tip';
+import { ImageLightbox } from '@/components/image-lightbox';
+import { FilePicker } from '@/components/file-picker';
 
 type CheckType = 'pickup' | 'return';
 
@@ -84,11 +87,10 @@ function CheckSummary({
                         }).url;
 
                         return (
-                            <a
+                            <ImageLightbox
                                 key={index}
-                                href={url}
-                                target="_blank"
-                                rel="noopener noreferrer"
+                                src={url}
+                                alt={`${titles[type]} photo ${index + 1}`}
                                 className="block size-14 overflow-hidden rounded-lg border"
                             >
                                 <img
@@ -96,7 +98,7 @@ function CheckSummary({
                                     alt={`${titles[type]} photo ${index + 1}`}
                                     className="size-full object-cover"
                                 />
-                            </a>
+                            </ImageLightbox>
                         );
                     })}
                 </div>
@@ -229,16 +231,12 @@ function CheckDialog({
                         : undefined
                 }
             >
-                <Input
+                <FilePicker
                     id="check_photos"
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
                     multiple
-                    onChange={(event) =>
-                        form.setData(
-                            'photos',
-                            Array.from(event.target.files ?? []).slice(0, 8),
-                        )
+                    placeholder="Take or choose photos"
+                    onFiles={(files) =>
+                        form.setData('photos', files.slice(0, 8))
                     }
                 />
             </FormField>
@@ -282,14 +280,16 @@ export function BookingInspectionsCard({ booking }: { booking: Booking }) {
                                     {titles[type]}
                                 </p>
                                 {check && canRecord && (
-                                    <button
-                                        type="button"
-                                        aria-label={`Edit ${titles[type].toLowerCase()} check`}
-                                        className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                                        onClick={() => setEditing(type)}
-                                    >
-                                        <Pencil className="size-3.5" />
-                                    </button>
+                                    <Hint text="Edit check">
+                                        <button
+                                            type="button"
+                                            aria-label={`Edit ${titles[type].toLowerCase()} check`}
+                                            className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                                            onClick={() => setEditing(type)}
+                                        >
+                                            <Pencil className="size-3.5" />
+                                        </button>
+                                    </Hint>
                                 )}
                             </div>
                             {check ? (

@@ -193,9 +193,8 @@ export default function LessorTransfers({
         <>
             <Head title="Transfers" />
 
-            <div className="mx-auto w-full max-w-5xl space-y-6 p-4 md:p-8">
+            <div className="mx-auto w-full max-w-7xl space-y-6 p-4 md:p-8">
                 <PageHeader
-                    eyebrow="Bank transfers"
                     title="Transfers"
                     description="Open your banking app, find each reference, then mark it paid or ask the renter to send it again."
                     actions={
