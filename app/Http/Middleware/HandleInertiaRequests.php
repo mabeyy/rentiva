@@ -62,10 +62,14 @@ class HandleInertiaRequests extends Middleware
                     return null;
                 }
 
+                // Staff working as their owner only see the alerts their permissions cover.
+                $actions = $area === 'lessor' ? TeamMember::visibleAlertActions() : null;
+                $alerts = fn () => TeamMember::onlyAlerts($user->notifications(), $actions);
+
                 return [
-                    'unread' => $user->unreadNotifications()->count(),
+                    'unread' => $alerts()->whereNull('read_at')->count(),
                     'read_url' => route("{$area}.notifications.read"),
-                    'items' => $user->notifications()->latest()->limit(8)->get()
+                    'items' => $alerts()->latest()->limit(8)->get()
                         ->map(fn (DatabaseNotification $notification): array => [
                             'id' => $notification->id,
                             ...$notification->data,
@@ -82,24 +86,22 @@ class HandleInertiaRequests extends Middleware
             // Set while an admin is viewing the app as an owner.
             'impersonation' => fn (): ?array => ($admin = User::impersonator()) ? [
                 'admin_name' => $admin->name,
-                'owner_name' => $request->user()?->storefront?->name ?? $request->user()?->name,
+                'owner_name' => $request->user()?->storefront->name ?? $request->user()?->name,
             ] : null,
             // The owner's plan status, for a reminder banner. Staff don't see it.
             'billing' => function () use ($request): ?array {
                 $user = $request->user();
 
-                if (! $user?->hasRole(UserRole::Lessor) || $request->attributes->has('staff') || ! $user->subscription) {
+                if (! $user?->hasRole(UserRole::Lessor) || $request->attributes->has('staff')) {
                     return null;
                 }
-
-                $subscription = $user->subscription;
 
                 return [
                     'overdue' => $user->invoices()->whereIn('status', ['unpaid', 'rejected'])->whereDate('due_on', '<', today())->count(),
                     'paused' => $user->isBillingPaused(),
                     'grace_days' => (int) Setting::get(Setting::BillingGraceDays),
                     'unpaid' => $user->invoices()->whereIn('status', ['unpaid', 'rejected'])->count(),
-                    'has_plan' => $subscription->plan_id !== null,
+                    'has_plan' => $user->hasPlan(),
                 ];
             },
             // Set when a staff member is working in their employer's owner area.
@@ -107,10 +109,15 @@ class HandleInertiaRequests extends Middleware
                 $membership = $request->attributes->get('staffMembership');
 
                 return $membership instanceof TeamMember ? [
-                    'owner_name' => $membership->owner->storefront?->name ?? $membership->owner->name,
+                    'owner_name' => $membership->owner->storefront->name ?? $membership->owner->name,
                     'permissions' => $membership->permissions,
                 ] : null;
             },
+            // The owner's own booking page, for "View booking page" in the
+            // sidebar. Staff work as their owner, so they get the same one.
+            'publicSiteUrl' => fn (): ?string => ($storefront = $request->user()?->storefront)
+                ? route('storefronts.show', $storefront)
+                : null,
             'turnstileSiteKey' => Turnstile::isEnabled() ? config('services.turnstile.site_key') : null,
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];

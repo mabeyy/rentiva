@@ -5,6 +5,10 @@ namespace App\Models;
 use App\Enums\UserRole;
 use App\Enums\UserStatus;
 use App\Http\Controllers\Admin\ImpersonationController;
+use App\Notifications\BookingRequested;
+use App\Notifications\CarPaperExpiring;
+use App\Notifications\CarStatusChanged;
+use App\Notifications\PaymentSubmitted;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -17,6 +21,7 @@ use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Notifications\Notification;
 use Illuminate\Support\Carbon;
 use Laravel\Fortify\Contracts\PasskeyUser;
 use Laravel\Fortify\PasskeyAuthenticatable;
@@ -70,6 +75,42 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
             'role' => UserRole::class,
             'status' => UserStatus::class,
         ];
+    }
+
+    /**
+     * Business emails an owner gets, sent to their booking page's
+     * notification email when they set one. Account emails (password
+     * resets, invoices, invitations) always go to the login email.
+     *
+     * @var list<class-string<Notification>>
+     */
+    public const array BUSINESS_NOTIFICATIONS = [
+        BookingRequested::class,
+        PaymentSubmitted::class,
+        CarPaperExpiring::class,
+        CarStatusChanged::class,
+    ];
+
+    /**
+     * The address mail notifications are sent to.
+     */
+    public function routeNotificationForMail(?Notification $notification = null): string
+    {
+        if ($notification && in_array($notification::class, self::BUSINESS_NOTIFICATIONS, true)) {
+            return $this->storefront?->notification_email ?: $this->email;
+        }
+
+        return $this->email;
+    }
+
+    /**
+     * Questions this person sent from the Help page.
+     *
+     * @return HasMany<SupportRequest, $this>
+     */
+    public function supportRequests(): HasMany
+    {
+        return $this->hasMany(SupportRequest::class);
     }
 
     /**
@@ -184,6 +225,44 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     }
 
     /**
+     * Whether the owner is on a plan with Rentiva.
+     */
+    public function hasPlan(): bool
+    {
+        return $this->subscription?->plan_id !== null;
+    }
+
+    /**
+     * Whether renters can book online on this owner's page: they need a plan,
+     * with no invoice overdue past the grace period. An owner can set up
+     * everything before picking a plan; bookings start once they do.
+     */
+    public function isTakingOnlineBookings(): bool
+    {
+        return ($this->storefront === null || $this->hasPlan()) && ! $this->isBillingPaused();
+    }
+
+    /**
+     * A plan limit (max_cars or max_staff): the owner's plan's, or the
+     * smallest plan's while they haven't picked one. Null means unlimited.
+     */
+    public function planLimit(string $limit): ?int
+    {
+        $plan = $this->subscription->plan ?? Plan::query()->where('is_active', true)->orderBy('price')->first();
+        $current = $plan?->{$limit};
+
+        // With a smaller plan waiting for the next period, its limit applies
+        // now, so the owner can't outgrow it before it starts.
+        $pending = $this->subscription?->pendingPlan?->{$limit};
+
+        return match (true) {
+            $pending === null => $current,
+            $current === null => $pending,
+            default => min($current, $pending),
+        };
+    }
+
+    /**
      * Whether the owner's booking page has stopped taking online bookings
      * because an invoice is overdue past the grace period.
      */
@@ -202,7 +281,7 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     {
         $adminId = request()->hasSession() ? request()->session()->get(ImpersonationController::SESSION_KEY) : null;
 
-        return $adminId ? self::query()->where('role', UserRole::Admin)->find($adminId) : null;
+        return $adminId ? self::query()->where('role', UserRole::Admin)->whereKey($adminId)->first() : null;
     }
 
     /**

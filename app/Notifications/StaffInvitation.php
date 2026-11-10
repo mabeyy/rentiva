@@ -29,7 +29,7 @@ class StaffInvitation extends Notification
 
     public function toMail(User $notifiable): MailMessage
     {
-        $business = $this->owner->storefront?->name ?? $this->owner->name;
+        $business = $this->owner->storefront->name ?? $this->owner->name;
         $url = route('password.reset', ['token' => Password::createToken($notifiable), 'email' => $notifiable->email]);
 
         return (new MailMessage)

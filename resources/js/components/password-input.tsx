@@ -3,6 +3,7 @@ import type { ComponentProps, Ref } from 'react';
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { Hint } from '@/components/info-tip';
 
 export default function PasswordInput({
     className,
@@ -19,19 +20,23 @@ export default function PasswordInput({
                 ref={ref}
                 {...props}
             />
-            <button
-                type="button"
-                onClick={() => setShowPassword((prev) => !prev)}
-                className="absolute inset-y-0 right-0 flex items-center rounded-r-md px-3 text-muted-foreground hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:outline-none"
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-                tabIndex={-1}
-            >
-                {showPassword ? (
-                    <EyeOff className="size-4" />
-                ) : (
-                    <Eye className="size-4" />
-                )}
-            </button>
+            <Hint text={showPassword ? 'Hide password' : 'Show password'}>
+                <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    className="absolute inset-y-0 right-0 flex items-center rounded-r-md px-3 text-muted-foreground hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:outline-none"
+                    aria-label={
+                        showPassword ? 'Hide password' : 'Show password'
+                    }
+                    tabIndex={-1}
+                >
+                    {showPassword ? (
+                        <EyeOff className="size-4" />
+                    ) : (
+                        <Eye className="size-4" />
+                    )}
+                </button>
+            </Hint>
         </div>
     );
 }

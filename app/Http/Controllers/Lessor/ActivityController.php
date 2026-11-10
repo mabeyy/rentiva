@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Lessor;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\BookingEventResource;
 use App\Models\BookingEvent;
+use App\Models\TeamMember;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -27,6 +28,9 @@ class ActivityController extends Controller
 
         $events = BookingEventResource::collection(BookingEvent::query()
             ->forOwner($request->user()->id)
+            // Staff only see what their permissions cover: bookings and their money.
+            ->when(! TeamMember::actingCan('bookings'), fn (Builder $query) => $query->whereNull('booking_id'))
+            ->when(! TeamMember::actingCan('payments'), fn (Builder $query) => $query->whereNotIn('action', BookingEvent::MONEY_ACTIONS))
             ->with('booking:id,reference,renter_name,car_id', 'booking.car:id,make,model,year,pickup_location_id', 'car:id,make,model,year,pickup_location_id')
             ->when($filters['action'] ?? null, fn (Builder $query, string $action) => $query->where('action', $action))
             ->when($filters['actor'] ?? null, fn (Builder $query, string $actor) => $query->where('actor_type', $actor))

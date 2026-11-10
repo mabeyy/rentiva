@@ -32,7 +32,7 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
     const { isCurrentOrParentUrl } = useCurrentUrl();
 
     return (
-        <div className="px-4 py-6">
+        <div className="mx-auto w-full max-w-7xl p-4 md:p-8">
             <Heading
                 title="Settings"
                 description="Manage your profile and account settings"

@@ -137,6 +137,11 @@ export const actionMeta: Record<
         icon: CalendarCog,
         tone: 'bg-sky-500/10 text-sky-700 dark:text-sky-300',
     },
+    change_withdrawn: {
+        label: 'Change withdrawn',
+        icon: Undo2,
+        tone: 'bg-muted text-muted-foreground',
+    },
     change_declined: {
         label: 'Change declined',
         icon: X,
@@ -241,12 +246,8 @@ export function ActivityFeed({
         <>
             <Head title="Activity" />
 
-            <div className="space-y-6 p-4 md:p-8">
-                <PageHeader
-                    eyebrow="What happened"
-                    title="Activity"
-                    description={description}
-                />
+            <div className="mx-auto w-full max-w-7xl space-y-6 p-4 md:p-8">
+                <PageHeader title="Activity" description={description} />
 
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                     <SearchInput

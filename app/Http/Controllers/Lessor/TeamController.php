@@ -31,7 +31,7 @@ class TeamController extends Controller
                 'permissions' => $member->permissions,
             ]),
             'permissions' => collect(TeamMember::PERMISSIONS)->map(fn (string $label, string $value): array => ['value' => $value, 'label' => $label])->values(),
-            'staffLimit' => $request->user()->subscription?->plan?->max_staff,
+            'staffLimit' => $request->user()->planLimit('max_staff'),
         ]);
     }
 
@@ -47,7 +47,7 @@ class TeamController extends Controller
             ...$this->permissionRules(),
         ], ['email.unique' => __('That email already has a Rentiva account.')]);
 
-        $limit = $owner->subscription?->plan?->max_staff;
+        $limit = $owner->planLimit('max_staff');
 
         if ($limit !== null && $owner->team()->count() >= $limit) {
             throw ValidationException::withMessages(['email' => __('Your plan allows :count staff. Upgrade under Billing to add more.', ['count' => $limit])]);
