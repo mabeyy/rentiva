@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Lessor;
 
+use App\Actions\Images\StoreOptimizedImage;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Lessor\UpdateStorefrontRequest;
 use App\Http\Resources\PickupLocationResource;
@@ -12,7 +13,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
-use RuntimeException;
 
 class StorefrontController extends Controller
 {
@@ -28,6 +28,8 @@ class StorefrontController extends Controller
             'pickupLocations' => PickupLocationResource::collection(
                 $request->user()->pickupLocations()->orderBy('city')->orderBy('address')->get(),
             ),
+            'notificationEmail' => $storefront?->notification_email,
+            'accountEmail' => $request->user()->email,
             'suggestedSlug' => $storefront ? null : Storefront::uniqueSlugFor($request->user()->name),
         ]);
     }
@@ -47,11 +49,7 @@ class StorefrontController extends Controller
                 Storage::disk('public')->delete($storefront->logo_path);
             }
 
-            $path = $request->file('logo')->store('storefronts', 'public');
-
-            if ($path === false) {
-                throw new RuntimeException('The logo could not be stored.');
-            }
+            $path = app(StoreOptimizedImage::class)->handle($request->file('logo'), 'storefronts', 'public', StoreOptimizedImage::LOGO, 90);
 
             $storefront->logo_path = $path;
         }

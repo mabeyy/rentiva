@@ -41,6 +41,13 @@ use Illuminate\Support\Str;
  * @property int $min_rental_days
  * @property int $advance_notice_hours How long before pickup renters must book.
  * @property int $max_advance_days How far ahead renters can book.
+ * @property int $default_weekly_discount Percent off 7+ day rentals, for cars without their own.
+ * @property int $default_monthly_discount Percent off 28+ day rentals, for cars without their own.
+ * @property int|null $default_delivery_fee In centavos; null when cars aren't delivered.
+ * @property int|null $default_driver_daily_rate In centavos per day; null when no driver is offered.
+ * @property int $default_deposit_percent Security deposit as a percent of the rental.
+ * @property int|null $damage_participation_fee In centavos: what the renter pays first if the car is damaged, like an insurance participation fee.
+ * @property string|null $damage_policy The owner's damage terms, which renters agree to when booking.
  * @property bool $requires_license_photo Whether renters must upload a license photo to book.
  * @property int|null $data_retention_months Admin-set override of the platform's renter-details retention, in months.
  * @property string|null $resend_api_key Encrypted; sends renter emails from the owner's own domain.
@@ -62,17 +69,19 @@ use Illuminate\Support\Str;
  * @property string|null $city Copied from the main pickup location, for the directory's city filter.
  * @property int|null $main_pickup_location_id
  * @property string|null $phone
+ * @property string|null $notification_email Where booking emails for the owner go, instead of their login email.
  * @property string|null $facebook_url
  * @property string|null $instagram_url
  * @property string|null $tiktok_url
  * @property string|null $logo_path
  * @property string|null $brand_color Hex color such as #E8622A, or null for the default.
  * @property-read string|null $logo_url
+ * @property-read bool|null $is_featured Set by the directory listing.
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
 #[RouteKey('slug')]
-#[Fillable(['name', 'slug', 'listed_in_directory', 'tagline', 'about', 'city', 'main_pickup_location_id', 'phone', 'facebook_url', 'instagram_url', 'tiktok_url', 'logo_path', 'brand_color', 'accepts_pay_at_pickup', 'accepts_bank_transfer', 'transfer_deadline_minutes', 'proof_retention_days', 'payment_policy', 'renter_cancellation', 'cancellation_notice_hours', 'data_retention_months', 'resend_api_key', 'mail_from_address', 'semaphore_api_key', 'sms_sender_name', 'sms_enabled', 'google_calendar_id', 'google_client_email', 'google_private_key', 'google_calendar_enabled', 'pickup_time', 'remind_email_24h', 'remind_email_2h', 'remind_sms_24h', 'remind_sms_2h', 'requires_license_photo', 'down_payment_enabled', 'down_payment_percent', 'min_rental_days', 'advance_notice_hours', 'max_advance_days'])]
+#[Fillable(['name', 'slug', 'listed_in_directory', 'tagline', 'about', 'city', 'main_pickup_location_id', 'phone', 'notification_email', 'facebook_url', 'instagram_url', 'tiktok_url', 'logo_path', 'brand_color', 'accepts_pay_at_pickup', 'accepts_bank_transfer', 'transfer_deadline_minutes', 'proof_retention_days', 'payment_policy', 'renter_cancellation', 'cancellation_notice_hours', 'data_retention_months', 'resend_api_key', 'mail_from_address', 'semaphore_api_key', 'sms_sender_name', 'sms_enabled', 'google_calendar_id', 'google_client_email', 'google_private_key', 'google_calendar_enabled', 'pickup_time', 'remind_email_24h', 'remind_email_2h', 'remind_sms_24h', 'remind_sms_2h', 'requires_license_photo', 'down_payment_enabled', 'down_payment_percent', 'min_rental_days', 'advance_notice_hours', 'max_advance_days', 'default_weekly_discount', 'default_monthly_discount', 'default_delivery_fee', 'default_driver_daily_rate', 'default_deposit_percent', 'damage_participation_fee', 'damage_policy'])]
 class Storefront extends Model
 {
     /** @use HasFactory<StorefrontFactory> */
@@ -94,7 +103,17 @@ class Storefront extends Model
         'listed_in_directory' => true,
         'accepts_pay_at_pickup' => true,
         'accepts_bank_transfer' => false,
+        // Starting long-stay discounts for a new business; owners can change them.
+        'default_weekly_discount' => 10,
+        'default_monthly_discount' => 20,
     ];
+
+    /**
+     * Car fields that follow the business defaults unless a car has its own.
+     *
+     * @var list<string>
+     */
+    public const array EXTRAS = ['weekly_discount', 'monthly_discount', 'delivery_fee', 'driver_daily_rate', 'deposit_percent'];
 
     /**
      * Get the attributes that should be cast.
@@ -118,6 +137,12 @@ class Storefront extends Model
             'min_rental_days' => 'integer',
             'advance_notice_hours' => 'integer',
             'max_advance_days' => 'integer',
+            'default_weekly_discount' => 'integer',
+            'default_monthly_discount' => 'integer',
+            'default_delivery_fee' => 'integer',
+            'default_driver_daily_rate' => 'integer',
+            'default_deposit_percent' => 'integer',
+            'damage_participation_fee' => 'integer',
             'resend_api_key' => 'encrypted',
             'semaphore_api_key' => 'encrypted',
             'sms_enabled' => 'boolean',
@@ -141,6 +166,31 @@ class Storefront extends Model
             $this->accepts_pay_at_pickup ? PaymentMethod::PayAtPickup : null,
             $this->accepts_bank_transfer ? PaymentMethod::BankTransfer : null,
         ]));
+    }
+
+    /**
+     * The business-wide discounts, extras and deposit, keyed by car field.
+     *
+     * @return array{weekly_discount: int, monthly_discount: int, delivery_fee: int|null, driver_daily_rate: int|null, deposit_percent: int}
+     */
+    public function defaultExtras(): array
+    {
+        return [
+            'weekly_discount' => (int) $this->default_weekly_discount,
+            'monthly_discount' => (int) $this->default_monthly_discount,
+            'delivery_fee' => $this->default_delivery_fee,
+            'driver_daily_rate' => $this->default_driver_daily_rate,
+            'deposit_percent' => (int) $this->default_deposit_percent,
+        ];
+    }
+
+    /**
+     * Copy the defaults onto every car that follows them, so prices
+     * everywhere read straight from the car.
+     */
+    public function applyDefaultExtrasToCars(): void
+    {
+        $this->owner->cars()->where('custom_extras', false)->update($this->defaultExtras());
     }
 
     /**
@@ -218,7 +268,8 @@ class Storefront extends Model
      */
     public function reviews(): HasManyThrough
     {
-        return $this->hasManyThrough(Review::class, Car::class, 'owner_id', 'car_id', 'owner_id', 'id');
+        // Reviews an admin hid stay off public pages and averages.
+        return $this->hasManyThrough(Review::class, Car::class, 'owner_id', 'car_id', 'owner_id', 'id')->whereNull('reviews.hidden_at');
     }
 
     /**

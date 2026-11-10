@@ -2,6 +2,7 @@ import { Facebook, Instagram } from 'lucide-react';
 import type { ComponentType, SVGProps } from 'react';
 import { cn } from '@/lib/utils';
 import type { Storefront } from '@/types';
+import { Hint } from '@/components/info-tip';
 
 /** Lucide has no TikTok mark, so draw the note glyph inline. */
 function TikTokIcon(props: SVGProps<SVGSVGElement>) {
@@ -46,18 +47,20 @@ export function StorefrontSocialLinks({
         <ul className={cn('flex items-center gap-2', className)}>
             {links.map(({ key, label, icon: Icon }) => (
                 <li key={key}>
-                    <a
-                        href={storefront[key]!}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        aria-label={`${storefront.name} on ${label}`}
-                        className={cn(
-                            'flex size-10 items-center justify-center rounded-full border bg-background transition-colors hover:border-brand hover:text-brand',
-                            linkClassName,
-                        )}
-                    >
-                        <Icon className="size-4" />
-                    </a>
+                    <Hint text={label}>
+                        <a
+                            href={storefront[key]!}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={`${storefront.name} on ${label}`}
+                            className={cn(
+                                'flex size-10 items-center justify-center rounded-full border bg-background transition-colors hover:border-brand hover:text-brand',
+                                linkClassName,
+                            )}
+                        >
+                            <Icon className="size-4" />
+                        </a>
+                    </Hint>
                 </li>
             ))}
         </ul>

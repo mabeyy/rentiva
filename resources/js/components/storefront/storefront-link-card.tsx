@@ -3,6 +3,7 @@ import { Check, Copy, ExternalLink, Lock, Store } from 'lucide-react';
 import { BrandButton } from '@/components/public/brand-button';
 import { Button } from '@/components/ui/button';
 import { useClipboard } from '@/hooks/use-clipboard';
+import { cn } from '@/lib/utils';
 import lessor from '@/routes/lessor';
 import type { Storefront } from '@/types';
 
@@ -24,12 +25,15 @@ function Glow() {
 
 /**
  * The lessor's shareable booking page link with copy and open actions, in the
- * landing page's dark "one link" style.
+ * landing page's dark "one link" style. `stacked` keeps the actions under the
+ * link, for narrow columns.
  */
 export function StorefrontLinkCard({
     storefront,
+    stacked = false,
 }: {
     storefront: Storefront | null;
+    stacked?: boolean;
 }) {
     const [copiedText, copy] = useClipboard();
 
@@ -37,7 +41,13 @@ export function StorefrontLinkCard({
         return (
             <section className="relative overflow-hidden rounded-3xl bg-ink p-6 text-ink-foreground sm:p-8">
                 <Glow />
-                <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+                <div
+                    className={cn(
+                        'relative flex flex-col gap-6',
+                        !stacked &&
+                            'md:flex-row md:items-center md:justify-between',
+                    )}
+                >
                     <div className="flex items-start gap-4">
                         <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-brand text-brand-foreground">
                             <Store className="size-5" />
@@ -68,12 +78,23 @@ export function StorefrontLinkCard({
     return (
         <section className="relative overflow-hidden rounded-3xl bg-ink p-5 text-ink-foreground sm:p-6">
             <Glow />
-            <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div
+                className={cn(
+                    'relative flex flex-col gap-4',
+                    !stacked &&
+                        'lg:flex-row lg:items-center lg:justify-between',
+                )}
+            >
                 <div className="min-w-0">
                     <p className="text-[11px] font-semibold tracking-[0.22em] text-ink-foreground/60 uppercase">
                         Your booking page
                     </p>
-                    <p className="mt-1 flex min-w-0 items-center gap-2 font-display text-xl font-bold tracking-tight sm:text-2xl">
+                    <p
+                        className={cn(
+                            'mt-1 flex min-w-0 items-center gap-2 font-display font-bold tracking-tight',
+                            stacked ? 'text-lg' : 'text-xl sm:text-2xl',
+                        )}
+                    >
                         <Lock
                             aria-hidden
                             className="size-4 shrink-0 text-ink-foreground/40"

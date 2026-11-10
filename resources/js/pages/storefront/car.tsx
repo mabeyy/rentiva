@@ -12,12 +12,14 @@ export default function StorefrontCar({
     bookedRanges,
     reviews,
     reviewSummary,
+    writtenReviewCount,
 }: {
     storefront: Storefront;
     car: Car;
     bookedRanges: BookedRange[];
     reviews: PublicReview[];
     reviewSummary: { count: number; average: number | null };
+    writtenReviewCount: number;
 }) {
     return (
         <>
@@ -35,13 +37,17 @@ export default function StorefrontCar({
                     <div className="mt-14">
                         <PublicReviews
                             reviews={reviews}
+                            title="Reviews of this car"
+                            average={reviewSummary.average}
+                            ratingCount={reviewSummary.count}
+                            writtenCount={writtenReviewCount}
+                            allReviewsHref={
+                                storefronts.reviews(storefront.slug, {
+                                    query: { car: car.slug },
+                                }).url
+                            }
                             showCar={false}
                             businessName={storefront.name}
-                            title={
-                                reviewSummary.average
-                                    ? `${reviewSummary.average.toFixed(1)} ★ from ${reviewSummary.count} ${reviewSummary.count === 1 ? 'review' : 'reviews'}`
-                                    : 'Reviews'
-                            }
                         />
                     </div>
                 )}

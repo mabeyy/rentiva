@@ -29,8 +29,9 @@ export default function StorefrontShow({
     filters,
     locations,
     reviews,
+    writtenReviewCount,
     ...options
-}: Props & { reviews: PublicReview[] }) {
+}: Props & { reviews: PublicReview[]; writtenReviewCount: number }) {
     const route = storefronts.show(storefront.slug);
     const fleetOptions = {
         ...options,
@@ -78,6 +79,12 @@ export default function StorefrontShow({
                 <div className="mx-auto max-w-7xl px-4 pb-14 sm:px-6">
                     <PublicReviews
                         reviews={reviews}
+                        average={summary.averageRating}
+                        ratingCount={summary.reviewCount}
+                        writtenCount={writtenReviewCount}
+                        allReviewsHref={
+                            storefronts.reviews(storefront.slug).url
+                        }
                         businessName={storefront.name}
                     />
                 </div>

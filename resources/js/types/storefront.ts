@@ -48,6 +48,10 @@ export type Storefront = {
     }[];
     /** The owner's payment & cancellation policy, agreed to when booking. */
     payment_policy: string | null;
+    /** Centavos the renter pays first if the car is damaged; null when not charged. */
+    damage_participation_fee: number | null;
+    /** The owner's damage terms, agreed to when booking. */
+    damage_policy: string | null;
 };
 
 /**

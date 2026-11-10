@@ -36,6 +36,8 @@ Route::middleware('signed')->group(function () {
     Route::post('bookings/{booking}/change-request', [BookingChangeRequestController::class, 'store'])
         ->middleware('throttle:10,1')
         ->name('bookings.change-request.store');
+    Route::delete('bookings/{booking}/change-request', [BookingChangeRequestController::class, 'destroy'])
+        ->name('bookings.change-request.destroy');
     Route::get('bookings/{booking}', [BookingController::class, 'show'])->name('bookings.show');
     Route::delete('bookings/{booking}', [BookingController::class, 'destroy'])->name('bookings.destroy');
     Route::post('bookings/{booking}/payment', [BookingPaymentController::class, 'store'])
@@ -68,6 +70,9 @@ Route::get('{storefront}/find-booking', [BookingLookupController::class, 'create
 Route::get('{storefront}/privacy', [PrivacyController::class, 'storefront'])
     ->where('storefront', '[a-z0-9-]+')
     ->name('storefronts.privacy');
+Route::get('{storefront}/reviews', [StorefrontController::class, 'reviews'])
+    ->where('storefront', '[a-z0-9-]+')
+    ->name('storefronts.reviews');
 Route::get('{storefront}/{car}', [StorefrontController::class, 'car'])
     ->where('storefront', '[a-z0-9-]+')
     ->name('storefronts.cars.show');

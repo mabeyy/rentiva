@@ -1,5 +1,7 @@
 import { Link, usePage } from '@inertiajs/react';
 import { Menu } from 'lucide-react';
+import type { MouseEvent } from 'react';
+import { useState } from 'react';
 import { BrandButton } from '@/components/public/brand-button';
 import { SiteLogo } from '@/components/public/site-logo';
 import { Button } from '@/components/ui/button';
@@ -55,7 +57,61 @@ function AccountActions({ stacked = false }: { stacked?: boolean }) {
     );
 }
 
+/**
+ * For a link to a section of the page we're already on (like Pricing on the
+ * home page), scroll there smoothly instead of jumping. Returns whether it
+ * handled the click.
+ */
+function scrollToSectionOnPage(href: string): boolean {
+    const url = new URL(href, window.location.origin);
+    const target =
+        url.hash && url.pathname === window.location.pathname
+            ? document.getElementById(url.hash.slice(1))
+            : null;
+
+    if (!target) {
+        return false;
+    }
+
+    const prefersReducedMotion = window.matchMedia(
+        '(prefers-reduced-motion: reduce)',
+    ).matches;
+    target.scrollIntoView({
+        behavior: prefersReducedMotion ? 'auto' : 'smooth',
+    });
+    window.history.replaceState(window.history.state, '', url.hash);
+
+    return true;
+}
+
+function hrefOf(href: string | { url: string }): string {
+    return typeof href === 'string' ? href : href.url;
+}
+
 export function SiteHeader() {
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+    function handleSectionLink(event: MouseEvent, href: string): void {
+        if (scrollToSectionOnPage(href)) {
+            event.preventDefault();
+        }
+    }
+
+    function handleMenuLink(event: MouseEvent, href: string): void {
+        const url = new URL(href, window.location.origin);
+
+        if (!url.hash || url.pathname !== window.location.pathname) {
+            setIsMenuOpen(false);
+
+            return;
+        }
+
+        // The open menu locks page scrolling, so close it first.
+        event.preventDefault();
+        setIsMenuOpen(false);
+        window.setTimeout(() => scrollToSectionOnPage(href), 300);
+    }
+
     const hasScrolled = useHasScrolled();
     const { isCurrentUrl } = useCurrentUrl();
 
@@ -79,6 +135,9 @@ export function SiteHeader() {
                             key={link.title}
                             href={link.href}
                             prefetch
+                            onClick={(event) =>
+                                handleSectionLink(event, hrefOf(link.href))
+                            }
                             className={cn(
                                 'rounded-full px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground',
                                 isCurrentUrl(link.href) &&
@@ -94,13 +153,13 @@ export function SiteHeader() {
                     <AccountActions />
                 </div>
 
-                <Sheet>
+                <Sheet open={isMenuOpen} onOpenChange={setIsMenuOpen}>
                     <SheetTrigger asChild>
                         <Button
                             variant="ghost"
                             size="icon"
                             className="ml-auto rounded-full md:hidden"
-                            aria-label="Open menu"
+                            tooltip="Menu"
                         >
                             <Menu />
                         </Button>
@@ -116,6 +175,9 @@ export function SiteHeader() {
                                 <Link
                                     key={link.title}
                                     href={link.href}
+                                    onClick={(event) =>
+                                        handleMenuLink(event, hrefOf(link.href))
+                                    }
                                     className="rounded-lg px-3 py-2.5 font-medium hover:bg-foreground/5"
                                 >
                                     {link.title}

@@ -53,6 +53,7 @@ class UpdateStorefrontRequest extends FormRequest
             'about' => ['nullable', 'string', 'max:2000'],
             'main_pickup_location_id' => ['nullable', 'integer', Rule::exists('pickup_locations', 'id')->where('owner_id', $this->user()->id)],
             'phone' => ['nullable', 'string', 'regex:/^(\+63|0)9\d{9}$/'],
+            'notification_email' => ['nullable', 'email', 'max:255'],
             'facebook_url' => ['nullable', 'url:https', 'max:255', 'regex:#^https://(www\.|m\.|web\.)?(facebook|fb)\.com/.+#i'],
             'instagram_url' => ['nullable', 'url:https', 'max:255', 'regex:#^https://(www\.)?instagram\.com/.+#i'],
             'tiktok_url' => ['nullable', 'url:https', 'max:255', 'regex:#^https://(www\.)?tiktok\.com/.+#i'],

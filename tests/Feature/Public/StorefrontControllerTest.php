@@ -149,3 +149,51 @@ test('the booking page shows written reviews with a short renter name and the ow
     $this->get(route('storefronts.cars.show', [$storefront, $car]))
         ->assertInertia(fn (AssertableInertia $page) => $page->has('reviews', 1)->where('reviewSummary.count', 2));
 });
+
+test('the booking page lists the 3 latest written reviews and how many there are in all', function () {
+    $storefront = Storefront::factory()->create();
+    $car = Car::factory()->for($storefront->owner, 'owner')->create();
+    foreach (range(1, 5) as $day) {
+        Review::factory()->for(Booking::factory()->for($car)->completed())
+            ->create(['comment' => "Review {$day}", 'created_at' => now()->subDays(10 - $day)]);
+    }
+    Review::factory()->for(Booking::factory()->for($car)->completed())->create(['comment' => null]);
+
+    $this->get(route('storefronts.show', $storefront))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->has('reviews', 3)
+            ->where('reviews.0.comment', 'Review 5')
+            ->where('writtenReviewCount', 5));
+});
+
+test('the reviews page has every written review, the average and how ratings spread', function () {
+    $storefront = Storefront::factory()->create();
+    $car = Car::factory()->for($storefront->owner, 'owner')->create();
+    $otherCar = Car::factory()->for($storefront->owner, 'owner')->create();
+    foreach ([5, 5, 4, 2] as $rating) {
+        Review::factory()->for(Booking::factory()->for($car)->completed())->create(['rating' => $rating, 'comment' => 'Noted']);
+    }
+    Review::factory()->for(Booking::factory()->for($otherCar)->completed())->create(['rating' => 3, 'comment' => null]);
+
+    $this->get(route('storefronts.reviews', $storefront))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('storefront/reviews')
+            ->has('reviews.data', 4)
+            ->where('summary.count', 5)
+            ->where('summary.average', 3.8)
+            ->where('summary.breakdown', ['5' => 2, '4' => 1, '3' => 1, '2' => 1, '1' => 0])
+            ->where('car', null));
+
+    $this->get(route('storefronts.reviews', [$storefront, 'car' => $otherCar->slug]))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('car.slug', $otherCar->slug)
+            ->has('reviews.data', 0)
+            ->where('summary.count', 1));
+});
+
+test('a closed business has no reviews page', function () {
+    $storefront = Storefront::factory()->for(User::factory()->suspended(), 'owner')->create();
+
+    $this->get(route('storefronts.reviews', $storefront))->assertNotFound();
+});

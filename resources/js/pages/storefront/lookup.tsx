@@ -17,7 +17,7 @@ export default function StorefrontBookingLookup() {
                     aria-hidden
                     className="pointer-events-none absolute -top-40 right-[-10%] size-[560px] rounded-full bg-[radial-gradient(circle,color-mix(in_oklch,var(--brand)_24%,transparent),transparent_65%)]"
                 />
-                <div className="relative mx-auto flex max-w-xl flex-col items-center px-4 pt-16 pb-24 text-center sm:px-6 motion-safe:animate-in motion-safe:duration-700 motion-safe:fade-in motion-safe:slide-in-from-bottom-4">
+                <div className="relative mx-auto flex max-w-xl flex-col items-center px-4 pt-16 pb-24 text-center motion-safe:animate-in motion-safe:duration-700 motion-safe:fade-in motion-safe:slide-in-from-bottom-4 sm:px-6">
                     <p className="flex items-center gap-3 text-xs font-semibold tracking-[0.22em] text-muted-foreground uppercase">
                         <span
                             aria-hidden

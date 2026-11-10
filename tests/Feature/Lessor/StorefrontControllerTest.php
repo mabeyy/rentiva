@@ -1,10 +1,16 @@
 <?php
 
+use App\Models\Booking;
+use App\Models\Car;
 use App\Models\PickupLocation;
 use App\Models\Storefront;
+use App\Models\TeamMember;
 use App\Models\User;
+use App\Notifications\BookingRequested;
+use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Inertia\Testing\AssertableInertia as Assert;
 
 test('a lessor customizes their booking page and uploads a logo', function () {
     Storage::fake('public');
@@ -159,4 +165,52 @@ test('a lessor cannot pick another lessor\'s pickup location as main', function 
             'main_pickup_location_id' => PickupLocation::factory()->create()->id,
         ])
         ->assertSessionHasErrors('main_pickup_location_id');
+});
+
+test('a lessor sets where their booking emails go', function () {
+    $storefront = Storefront::factory()->create();
+
+    $this->actingAs($storefront->owner)->put(route('lessor.storefront.update'), [
+        'name' => $storefront->name,
+        'slug' => $storefront->slug,
+        'notification_email' => 'bookings@abqrentals.ph',
+    ])->assertSessionHasNoErrors();
+
+    expect($storefront->fresh()->notification_email)->toBe('bookings@abqrentals.ph');
+
+    $this->put(route('lessor.storefront.update'), [
+        'name' => $storefront->name,
+        'slug' => $storefront->slug,
+        'notification_email' => 'not-an-email',
+    ])->assertSessionHasErrors('notification_email');
+});
+
+test('booking emails go to the notification email and account emails to the login email', function () {
+    $storefront = Storefront::factory()->create(['notification_email' => 'bookings@abqrentals.ph']);
+    $owner = $storefront->owner;
+    $booking = Booking::factory()->for(Car::factory()->for($owner, 'owner'))->create();
+
+    expect($owner->routeNotificationFor('mail', new BookingRequested($booking)))->toBe('bookings@abqrentals.ph')
+        ->and($owner->routeNotificationFor('mail', new ResetPassword('token')))->toBe($owner->email);
+
+    $storefront->update(['notification_email' => null]);
+
+    expect($owner->fresh()->routeNotificationFor('mail', new BookingRequested($booking)))->toBe($owner->email);
+});
+
+test('the sidebar links owners and their staff to the owner\'s own booking page', function () {
+    $storefront = Storefront::factory()->create(['slug' => 'abq-car-rental']);
+    $member = TeamMember::factory()->for($storefront->owner, 'owner')->create(['permissions' => ['bookings']]);
+
+    $this->actingAs($storefront->owner)
+        ->get(route('lessor.dashboard'))
+        ->assertInertia(fn (Assert $page) => $page->where('publicSiteUrl', url('/abq-car-rental')));
+
+    $this->actingAs($member->user)
+        ->get(route('lessor.dashboard'))
+        ->assertInertia(fn (Assert $page) => $page->where('publicSiteUrl', url('/abq-car-rental')));
+
+    $this->actingAs(User::factory()->admin()->create())
+        ->get(route('admin.dashboard'))
+        ->assertInertia(fn (Assert $page) => $page->where('publicSiteUrl', null));
 });
