@@ -20,7 +20,7 @@ class ReviewFactory extends Factory
     {
         return [
             'booking_id' => Booking::factory()->completed(),
-            'car_id' => fn (array $attributes): int => Booking::findOrFail($attributes['booking_id'])->car_id,
+            'car_id' => fn (array $attributes): int => Booking::query()->whereKey($attributes['booking_id'])->firstOrFail()->car_id,
             'rating' => fake()->numberBetween(4, 5),
             'comment' => fake()->optional(0.7)->sentence(12),
         ];

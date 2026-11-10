@@ -19,6 +19,9 @@ use Illuminate\Support\Carbon;
  * @property string|null $comment
  * @property string|null $owner_reply The owner's public answer.
  * @property Carbon|null $replied_at
+ * @property Carbon|null $reported_at When the owner reported it to Rentiva.
+ * @property string|null $report_reason
+ * @property Carbon|null $hidden_at When an admin took it off public pages.
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
@@ -37,6 +40,8 @@ class Review extends Model
     {
         return [
             'replied_at' => 'datetime',
+            'reported_at' => 'datetime',
+            'hidden_at' => 'datetime',
         ];
     }
 

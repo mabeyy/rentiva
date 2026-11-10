@@ -15,9 +15,12 @@ import lessor from '@/routes/lessor';
 export function ReviewReplyForm({
     reviewId,
     reply,
+    renterName,
 }: {
     reviewId: number;
     reply: string | null;
+    /** Shown on the button, e.g. "Reply to Juan". */
+    renterName?: string;
 }) {
     const [isEditing, setIsEditing] = useState(false);
     const form = useForm({ owner_reply: reply ?? '' });
@@ -32,9 +35,12 @@ export function ReviewReplyForm({
 
     if (reply && !isEditing) {
         return (
-            <div className="rounded-2xl bg-muted/50 p-3 text-sm">
+            <div className="rounded-2xl rounded-tl-sm bg-muted/60 px-4 py-3 text-sm">
                 <p className="flex items-center justify-between gap-2 text-xs font-semibold text-muted-foreground">
-                    Your reply
+                    <span className="flex items-center gap-1.5">
+                        <MessageSquareReply className="size-3.5" />
+                        Your reply
+                    </span>
                     <button
                         type="button"
                         className="font-medium hover:text-foreground"
@@ -50,14 +56,14 @@ export function ReviewReplyForm({
 
     if (!isEditing) {
         return (
-            <Button
-                variant="outline"
-                size="sm"
-                className="rounded-full"
+            <button
+                type="button"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-brand hover:underline"
                 onClick={() => setIsEditing(true)}
             >
-                <MessageSquareReply /> Reply
-            </Button>
+                <MessageSquareReply className="size-4" />
+                {renterName ? `Reply to ${renterName.split(' ')[0]}` : 'Reply'}
+            </button>
         );
     }
 

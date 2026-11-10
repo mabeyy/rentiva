@@ -1,17 +1,30 @@
-import { Head, Link } from '@inertiajs/react';
-import { formatDistanceToNowStrict, parseISO } from 'date-fns';
-import { MessageSquare, Star, X } from 'lucide-react';
+import { Head, Link, useForm } from '@inertiajs/react';
+import { Flag, MessageSquare, Star, X } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { useState } from 'react';
 import { ReviewReplyForm } from '@/components/bookings/review-reply-form';
 import { Stars } from '@/components/bookings/trip-review';
 import { EmptyState } from '@/components/empty-state';
+import InputError from '@/components/input-error';
 import { PageHeader } from '@/components/lessor/page-header';
 import { OptionSelect } from '@/components/option-select';
 import { PaginationLinks } from '@/components/pagination-links';
+import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import { useQueryFilters } from '@/hooks/use-query-filters';
 import { cn } from '@/lib/utils';
 import lessor from '@/routes/lessor';
 import type { Paginated } from '@/types';
+import { TimeAgo } from '@/components/time-ago';
 
 type OwnerReview = {
     id: number;
@@ -22,7 +35,82 @@ type OwnerReview = {
     car_name: string;
     renter_name: string;
     reference: string;
+    /** Sent to Rentiva and waiting for a decision. */
+    is_reported: boolean;
+    /** Taken off the booking page by Rentiva. */
+    is_hidden: boolean;
 };
+
+/**
+ * Report a review to Rentiva with a reason. Owners can't remove reviews
+ * themselves; an admin decides whether to hide it.
+ */
+function ReportReviewButton({ reviewId }: { reviewId: number }) {
+    const [isOpen, setIsOpen] = useState(false);
+    const form = useForm({ reason: '' });
+
+    return (
+        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <DialogTrigger asChild>
+                <button
+                    type="button"
+                    className="flex items-center gap-1 hover:text-foreground hover:underline"
+                >
+                    <Flag className="size-3" /> Report
+                </button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+                <form
+                    className="space-y-4"
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        form.put(lessor.reviews.report(reviewId).url, {
+                            preserveScroll: true,
+                            onSuccess: () => setIsOpen(false),
+                        });
+                    }}
+                >
+                    <DialogHeader>
+                        <DialogTitle>Report this review</DialogTitle>
+                        <DialogDescription>
+                            Rentiva checks reported reviews and hides ones that
+                            are abusive, share personal details, are fake or
+                            aren't about your business. A low rating on its own
+                            isn't a reason to hide one.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-1">
+                        <Textarea
+                            aria-label="Why are you reporting it?"
+                            placeholder="e.g. It includes our driver's phone number."
+                            rows={3}
+                            minLength={10}
+                            maxLength={255}
+                            value={form.data.reason}
+                            onChange={(event) =>
+                                form.setData('reason', event.target.value)
+                            }
+                            required
+                        />
+                        <InputError message={form.errors.reason} />
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={() => setIsOpen(false)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button type="submit" disabled={form.processing}>
+                            Send report
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+}
 
 type ReviewSummary = {
     count: number;
@@ -132,9 +220,8 @@ export default function LessorReviews({
         <>
             <Head title="Reviews" />
 
-            <div className="mx-auto w-full max-w-6xl space-y-6 p-4 md:p-8">
+            <div className="mx-auto w-full max-w-7xl space-y-6 p-4 md:p-8">
                 <PageHeader
-                    eyebrow="Your reputation"
                     title="Reviews"
                     description="What renters said after their trip. Your replies show on their booking."
                 />
@@ -389,77 +476,101 @@ export default function LessorReviews({
                             </div>
 
                             {reviews.data.length > 0 ? (
-                                <ul className="space-y-3">
+                                <ul className="divide-y overflow-hidden rounded-3xl border bg-background">
                                     {reviews.data.map((review) => (
                                         <li
                                             key={review.id}
-                                            className="rounded-3xl border bg-background p-5"
+                                            className="flex gap-3 p-5"
                                         >
-                                            <div className="flex items-start gap-3">
-                                                <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold text-muted-foreground">
-                                                    {initials(
-                                                        review.renter_name,
-                                                    )}
-                                                </span>
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                                                        <p className="font-semibold">
-                                                            {review.renter_name}
-                                                        </p>
-                                                        {review.created_at && (
-                                                            <p className="text-xs text-muted-foreground">
-                                                                {formatDistanceToNowStrict(
-                                                                    parseISO(
-                                                                        review.created_at,
-                                                                    ),
-                                                                    {
-                                                                        addSuffix: true,
-                                                                    },
-                                                                )}
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                                                        <Stars
-                                                            rating={
-                                                                review.rating
-                                                            }
-                                                            className="[&_svg]:size-3.5"
-                                                        />
-                                                        <span>
-                                                            {review.car_name}
+                                            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
+                                                {initials(review.renter_name)}
+                                            </span>
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                                    <p className="font-semibold">
+                                                        {review.renter_name}
+                                                    </p>
+                                                    {review.is_hidden ? (
+                                                        <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                                                            Hidden by Rentiva
                                                         </span>
-                                                        <span aria-hidden>
-                                                            ·
+                                                    ) : review.is_reported ? (
+                                                        <span className="rounded-full bg-sky-500/10 px-2 py-0.5 text-[11px] font-medium text-sky-700 dark:text-sky-300">
+                                                            Reported · Rentiva
+                                                            is checking
                                                         </span>
-                                                        <Link
-                                                            href={lessor.bookings.show(
-                                                                review.reference,
-                                                            )}
-                                                            className="font-mono hover:text-foreground hover:underline"
-                                                        >
-                                                            {review.reference}
-                                                        </Link>
-                                                    </div>
-
-                                                    {review.comment ? (
-                                                        <p className="mt-3 leading-relaxed whitespace-pre-line">
-                                                            {review.comment}
-                                                        </p>
                                                     ) : (
-                                                        <p className="mt-3 text-sm text-muted-foreground italic">
-                                                            No written comment.
-                                                        </p>
+                                                        !review.owner_reply && (
+                                                            <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">
+                                                                Needs a reply
+                                                            </span>
+                                                        )
                                                     )}
+                                                    {review.created_at && (
+                                                        <span className="ml-auto text-xs text-muted-foreground">
+                                                            <TimeAgo
+                                                                date={
+                                                                    review.created_at
+                                                                }
+                                                                strict
+                                                            />
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                                                    <Stars
+                                                        rating={review.rating}
+                                                        className="[&_svg]:size-3.5"
+                                                    />
+                                                    <span>
+                                                        {review.car_name}
+                                                    </span>
+                                                    <span aria-hidden>·</span>
+                                                    <Link
+                                                        href={lessor.bookings.show(
+                                                            review.reference,
+                                                        )}
+                                                        className="font-mono hover:text-foreground hover:underline"
+                                                    >
+                                                        {review.reference}
+                                                    </Link>
+                                                    {!review.is_reported &&
+                                                        !review.is_hidden && (
+                                                            <>
+                                                                <span
+                                                                    aria-hidden
+                                                                >
+                                                                    ·
+                                                                </span>
+                                                                <ReportReviewButton
+                                                                    reviewId={
+                                                                        review.id
+                                                                    }
+                                                                />
+                                                            </>
+                                                        )}
+                                                </div>
 
-                                                    <div className="mt-4 border-l-2 border-brand/30 pl-4">
-                                                        <ReviewReplyForm
-                                                            reviewId={review.id}
-                                                            reply={
-                                                                review.owner_reply
-                                                            }
-                                                        />
-                                                    </div>
+                                                {review.comment ? (
+                                                    <p className="mt-2.5 leading-relaxed whitespace-pre-line">
+                                                        {review.comment}
+                                                    </p>
+                                                ) : (
+                                                    <p className="mt-2.5 text-sm text-muted-foreground italic">
+                                                        Rated without a comment.
+                                                    </p>
+                                                )}
+
+                                                <div className="mt-3">
+                                                    <ReviewReplyForm
+                                                        reviewId={review.id}
+                                                        reply={
+                                                            review.owner_reply
+                                                        }
+                                                        renterName={
+                                                            review.renter_name
+                                                        }
+                                                    />
                                                 </div>
                                             </div>
                                         </li>

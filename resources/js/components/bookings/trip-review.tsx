@@ -60,7 +60,7 @@ export function TripReviewCard({
 
     if (review) {
         return (
-            <section className="rounded-3xl border p-6">
+            <section id="review" className="scroll-mt-6 rounded-3xl border p-6">
                 <h2 className="text-[11px] font-semibold tracking-[0.2em] text-muted-foreground uppercase">
                     Your review
                 </h2>
@@ -89,7 +89,10 @@ export function TripReviewCard({
     }
 
     return (
-        <section className="rounded-3xl border border-brand/30 bg-[color-mix(in_srgb,var(--brand)_5%,var(--background))] p-6">
+        <section
+            id="review"
+            className="scroll-mt-6 rounded-3xl border border-brand/30 bg-[color-mix(in_srgb,var(--brand)_5%,var(--background))] p-6"
+        >
             <h2 className="font-display text-2xl font-bold tracking-tight">
                 How was your trip?
             </h2>
